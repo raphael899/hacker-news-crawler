@@ -43,3 +43,7 @@ We considered three alternatives:
 - **The Hacker News API** would provide structured data, but the exercise specifically asks us to extract it by scraping the front page.
 
 Cheerio belongs inside the Hacker News adapter. The application receives typed entries through the news source port, so a change to the parser or page markup stays inside that adapter.
+
+## Why one download deadline
+
+The adapter uses one abort signal for both the request and the response body. A server can send headers promptly and then stall while sending HTML, so a deadline that ends when the headers arrive would leave the crawler waiting. The adapter reports timeouts separately from HTTP and network errors. Each download makes one request, with redirects rejected, so the time and request count stay predictable.
