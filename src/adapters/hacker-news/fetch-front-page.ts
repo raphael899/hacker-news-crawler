@@ -1,4 +1,4 @@
-import { CrawlerError } from './crawler-error.ts';
+import { CrawlerError } from '../../ports/crawler-error.ts';
 
 function readHackerNewsUrl(): string {
   const url = URL.parse(process.env.HN_URL ?? '');

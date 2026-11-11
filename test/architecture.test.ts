@@ -25,7 +25,11 @@ describe('architecture boundary', () => {
     try {
       expect((await app.inject('/entries')).statusCode).toBe(200);
       expect((await app.inject('/entries?filter=long')).statusCode).toBe(200);
-      expect((await app.inject('/entries?filter=unknown')).statusCode).toBe(400);
+      const invalidRequest = await app.inject('/entries?filter=unknown');
+      expect(invalidRequest.statusCode).toBe(400);
+      expect(invalidRequest.json()).toEqual({
+        error: { code: 'invalid_request', message: 'Request validation failed.' },
+      });
     } finally {
       await app.close();
     }

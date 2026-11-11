@@ -47,3 +47,7 @@ Cheerio belongs inside the Hacker News adapter. The application receives typed e
 ## Why one download deadline
 
 The adapter uses one abort signal for both the request and the response body. A server can send headers promptly and then stall while sending HTML, so a deadline that ends when the headers arrive would leave the crawler waiting. The adapter reports timeouts separately from HTTP and network errors. Each download makes one request, with redirects rejected, so the time and request count stay predictable.
+
+## Why map errors at the HTTP boundary
+
+The news source port defines errors in terms of the operation that failed. Fastify translates those errors into HTTP status codes and gives every route the same response format. Clients receive a stable code and a public message, while the server log keeps details such as the original cause.
