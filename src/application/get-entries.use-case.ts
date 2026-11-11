@@ -1,5 +1,5 @@
 import type { Entry } from '../domain/entry.ts';
-import type { NewsSourcePort } from '../ports/news-source.port.ts';
+import type { NewsSourcePort } from './ports/news-source.port.ts';
 
 export class GetEntriesUseCase {
   private readonly newsSource: NewsSourcePort;

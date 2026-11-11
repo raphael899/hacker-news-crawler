@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { buildApp } from '../src/adapters/http/app.ts';
+import { buildApp } from '../src/infrastructure/http/app.ts';
 import { GetEntriesUseCase } from '../src/application/get-entries.use-case.ts';
-import type { NewsSourcePort } from '../src/ports/news-source.port.ts';
+import type { NewsSourcePort } from '../src/application/ports/news-source.port.ts';
 
 describe('architecture boundary', () => {
   it('the application requests the first 30 entries through its port', async () => {
@@ -40,8 +40,8 @@ describe('architecture boundary', () => {
       '../src/domain/entry.ts',
       '../src/domain/filter.ts',
       '../src/application/get-entries.use-case.ts',
-      '../src/ports/news-source.port.ts',
-      '../src/ports/usage-repository.port.ts',
+      '../src/application/ports/news-source.port.ts',
+      '../src/application/ports/usage-repository.port.ts',
     ];
     for (const sourceFile of sourceFiles) {
       const source = readFileSync(new URL(sourceFile, import.meta.url), 'utf8');

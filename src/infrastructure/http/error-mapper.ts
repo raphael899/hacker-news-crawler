@@ -1,4 +1,4 @@
-import { CrawlerError, type CrawlerOutcome } from '../../ports/crawler-error.ts';
+import { CrawlerError, type CrawlerOutcome } from '../../application/ports/crawler-error.ts';
 
 interface HttpErrorResponse {
   statusCode: number;

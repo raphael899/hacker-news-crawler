@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchFrontPage } from '../src/adapters/hacker-news/fetch-front-page.ts';
+import { fetchFrontPage } from '../src/infrastructure/hacker-news/fetch-front-page.ts';
 
 describe('front page download', () => {
   const url = 'http://origin.test/';

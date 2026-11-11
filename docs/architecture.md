@@ -16,6 +16,8 @@ flowchart LR
 
 Dependencies point inward. The domain defines entry types and filtering rules, and the application coordinates the use case through ports. Fastify is the inbound adapter. The Hacker News and SQLite adapters provide the external capabilities the use case needs.
 
+The source tree groups business concepts under `src/domain/`, use cases and their contracts under `src/application/`, and concrete adapters under `src/infrastructure/`. The ports live in `src/application/ports/` because the use case defines the capabilities it needs. HTTP, Hacker News, and SQLite each have a folder in infrastructure.
+
 ## Why Node.js and TypeScript
 
 Node.js provides `fetch` for downloading the HTML. TypeScript gives the parser, use case, and ports a shared definition of an entry. Strict type checking helps catch missing fields and incorrect assumptions about optional values. The parser and HTTP adapter still validate external input at runtime.
