@@ -1,11 +1,24 @@
 import { CrawlerError } from './crawler-error.ts';
 
-export const DEFAULT_HN_URL = 'https://news.ycombinator.com/';
-export const DEFAULT_FETCH_TIMEOUT_MS = 5_000;
+function readHackerNewsUrl(): string {
+  const url = URL.parse(process.env.HN_URL ?? '');
+  if (!url || !['http:', 'https:'].includes(url.protocol)) {
+    throw new Error('HN_URL must be an absolute HTTP or HTTPS URL');
+  }
+  return url.href;
+}
+
+function readFetchTimeoutMs(): number {
+  const timeoutMs = Number(process.env.FETCH_TIMEOUT_MS);
+  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 2_147_483_647) {
+    throw new Error('FETCH_TIMEOUT_MS must be an integer between 1 and 2147483647');
+  }
+  return timeoutMs;
+}
 
 export async function fetchFrontPage(
-  url = DEFAULT_HN_URL,
-  timeoutMs = DEFAULT_FETCH_TIMEOUT_MS,
+  url = readHackerNewsUrl(),
+  timeoutMs = readFetchTimeoutMs(),
   request = fetch,
 ): Promise<string> {
   const signal = AbortSignal.timeout(timeoutMs);

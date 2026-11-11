@@ -14,6 +14,8 @@ npm ci
 cp .env.example .env
 ```
 
+Set `HN_URL` to the front-page URL and `FETCH_TIMEOUT_MS` to the download deadline in milliseconds. The example file uses Hacker News and a 5-second deadline.
+
 ## Start the service
 
 T01 provides the project foundation. Startup commands will be available once the HTTP server is wired to the Hacker News adapter.
