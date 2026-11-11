@@ -1,6 +1,8 @@
 # Architecture
 
-The project uses a small hexagonal structure.
+## Why a hexagonal structure
+
+The crawler has two external dependencies with different reasons to change. Hacker News can change its HTML, and the application can change how it stores usage records. Ports give the use case a stable contract for each dependency. This lets us test the use case with an in-memory source and keep page selectors and SQL inside their respective adapters.
 
 ```mermaid
 flowchart LR
@@ -12,7 +14,23 @@ flowchart LR
   SQLite[SQLite adapter] -. implements .-> UsagePort
 ```
 
-Dependencies point inward. Domain and application do not import Fastify, Cheerio, or SQLite. The outer adapters will implement the application ports.
+Dependencies point inward. The domain defines entry types and filtering rules, and the application coordinates the use case through ports. Fastify is the inbound adapter. The Hacker News and SQLite adapters provide the external capabilities the use case needs.
+
+## Why Node.js and TypeScript
+
+Node.js provides `fetch` for downloading the HTML. TypeScript gives the parser, use case, and ports a shared definition of an entry. Strict type checking helps catch missing fields and incorrect assumptions about optional values. The parser and HTTP adapter still validate external input at runtime.
+
+## Why Fastify
+
+Fastify provides query validation through a schema and lets tests exercise the route with an injected request. The adapter can validate the filter at the HTTP boundary and delegate the work to the use case.
+
+## Why Vitest and CI
+
+Vitest lets us test the use case with a fake source and the parser with saved HTML. CI runs lint, type checking, tests with coverage, and the build so reviewers can see whether a change meets the same checks used locally.
+
+## Why SQLite for usage records
+
+The usage history should survive a restart and be easy to inspect. SQLite provides persistent, queryable storage in a local file without requiring a database service. The usage repository port keeps storage details out of the use case.
 
 ## Why Cheerio for Hacker News
 

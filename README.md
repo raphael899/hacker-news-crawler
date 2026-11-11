@@ -1,37 +1,40 @@
 # Hacker News Crawler
 
-A small Node.js and TypeScript service for reading the first 30 Hacker News entries.
-
 ## Requirements
 
 - Node.js 24.15.0
 - npm
 
-## Setup
+## Install and configure
+
+Run these commands from the repository root:
 
 ```sh
 npm ci
 cp .env.example .env
 ```
 
-## Development checks
+## Start the service
+
+T01 provides the project foundation. Startup commands will be available once the HTTP server is wired to the Hacker News adapter.
+
+## Run tests
+
+```sh
+npm test
+npm run test:coverage
+```
+
+Use `npm test` to run the suite once and `npm run test:coverage` to check it against the configured coverage thresholds.
+
+## Lint, check types, and build
 
 ```sh
 npm run lint
 npm run typecheck
-npm run test:coverage
 npm run build
 ```
 
-## Architecture
+The build writes compiled JavaScript to `dist/`.
 
-The application uses a lightweight hexagonal structure.
-
-- `src/domain` contains core types and business rules.
-- `src/application` contains use cases that depend on ports.
-- `src/ports` defines contracts for external capabilities.
-- `src/adapters/http` is the Fastify entry point.
-- `src/adapters/hacker-news` will implement the news source port.
-- `src/adapters/sqlite` will implement the usage repository port.
-
-Dependencies point inward. The domain, application, and ports do not import Fastify, Cheerio, or SQLite. See [docs/architecture.md](docs/architecture.md).
+[Design decisions](docs/architecture.md)
