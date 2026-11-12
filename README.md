@@ -3,14 +3,14 @@
 ## Requirements
 
 - Node.js 24.15.0
-- npm
+- [pnpm](https://pnpm.io/installation) 10.24.0
 
 ## Install and configure
 
 Run these commands from the repository root:
 
 ```sh
-npm ci
+pnpm install --frozen-lockfile
 cp .env.example .env
 ```
 
@@ -23,18 +23,18 @@ The HTTP adapter currently runs through the test suite. Starting a standalone se
 ## Run tests
 
 ```sh
-npm test
-npm run test:coverage
+pnpm test
+pnpm test:coverage
 ```
 
-Use `npm test` to run the suite once and `npm run test:coverage` to check it against the configured coverage thresholds. Test directories mirror `src/`.
+Use `pnpm test` to run the suite once and `pnpm test:coverage` to check it against the configured coverage thresholds. Test directories mirror `src/`.
 
 ## Lint, check types, and build
 
 ```sh
-npm run lint
-npm run typecheck
-npm run build
+pnpm lint
+pnpm typecheck
+pnpm build
 ```
 
 The build writes compiled JavaScript to `dist/`.

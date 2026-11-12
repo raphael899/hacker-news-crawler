@@ -4,6 +4,8 @@
 
 The crawler has two external dependencies with different reasons to change. Hacker News can change its HTML, and the application can change how it stores usage records. Ports give the use case a stable contract for each dependency. This lets us test the use case with an in-memory source and keep page selectors and SQL inside their respective adapters.
 
+The diagram shows how the adapters will connect to the application.
+
 ```mermaid
 flowchart LR
   HTTP[HTTP adapter] --> UseCase[Application use case]
@@ -14,9 +16,9 @@ flowchart LR
   SQLite[Planned SQLite adapter] -. implements .-> UsagePort
 ```
 
-Dependencies point inward. The domain defines entry types and filtering rules, and the application coordinates the use case through ports. Fastify is the inbound adapter. The Hacker News adapter currently downloads HTML. The parser will turn that HTML into entries, and the planned SQLite adapter will store usage records.
+Dependencies point inward. The domain defines the entry shape, the allowed filter values, and the front-page size rule. The application requests entries through the news source port and validates the result. Fastify is the inbound adapter. The Hacker News adapter currently downloads HTML. The parser will turn that HTML into entries, and the planned SQLite adapter will store usage records.
 
-The source tree groups business concepts under `src/domain/`, use cases and their contracts under `src/application/`, and concrete adapters under `src/infrastructure/`. The ports live in `src/application/ports/` because the use case defines the capabilities it needs. HTTP and the Hacker News downloader each have a folder in infrastructure. The SQLite folder will be added with its implementation.
+The source tree groups business concepts under `src/domain/`, use cases and their contracts under `src/application/`, and concrete adapters under `src/infrastructure/`. The ports live in `src/application/ports/` because the use case defines the capabilities it needs. The HTTP adapter, Hacker News downloader, and environment configuration each have a folder in infrastructure. The SQLite folder will be added with its implementation.
 
 ## Why Node.js and TypeScript
 
@@ -26,9 +28,13 @@ Node.js provides `fetch` for downloading the HTML. TypeScript gives the parser, 
 
 Fastify provides query validation through a schema and lets tests exercise the route with an injected request. The adapter can validate the filter at the HTTP boundary and delegate the work to the use case.
 
+## Why pnpm
+
+The project declares the pnpm version in `package.json` and commits `pnpm-lock.yaml`. Local setup and CI use a frozen lockfile so both install the recorded dependency graph. CI caches the pnpm store to reuse downloaded packages between runs.
+
 ## Why Vitest and CI
 
-Vitest lets us test the use case with a fake source and the parser with saved HTML. CI runs lint, type checking, tests with coverage, and the build so reviewers can see whether a change meets the same checks used locally.
+Vitest lets us test the use case with a fake source, simulate failed downloads, and exercise the Fastify route without opening a port. The test directories mirror `src/`. Once the parser is in place, saved HTML will make its tests independent of the live site. CI runs lint, type checking, tests with coverage, and the build so reviewers can see whether a change meets the same checks used locally.
 
 ## Why SQLite for usage records
 
