@@ -9,8 +9,10 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "dev": "node --watch --env-file=.env src/main.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
+    "start": "node --env-file=.env dist/main.js",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   },

@@ -20,6 +20,8 @@ Dependencies point inward. The domain defines the entry shape, the allowed filte
 
 The source tree groups business concepts under `src/domain/`, use cases and their contracts under `src/application/`, and concrete adapters under `src/infrastructure/`. The ports live in `src/application/ports/` because the use case defines the capabilities it needs. The HTTP adapter, Hacker News downloader, and environment configuration each have a folder in infrastructure. The SQLite folder will be added with its implementation.
 
+`src/main.ts` is the composition root: it loads configuration, constructs the Hacker News adapter and use case, builds the Fastify application, and starts listening. Keeping this wiring outside the adapters makes dependencies visible and lets route tests inject a fake use case without opening a socket.
+
 ## Why Node.js and TypeScript
 
 Node.js provides `fetch` for downloading the HTML. TypeScript gives the parser, use case, and ports a shared definition of an entry. Strict type checking helps catch missing fields and incorrect assumptions about optional values. The parser and HTTP adapter still validate external input at runtime.
@@ -56,7 +58,11 @@ Cheerio belongs inside the Hacker News adapter. The application receives typed e
 
 ## Why load configuration at startup
 
-`loadConfig()` reads and validates the environment in one place. The future server entry point will call it once and pass the resulting settings to the downloader. The downloader accepts those settings directly, which lets its tests run without changing the process environment.
+`loadConfig()` reads and validates the environment in one place. The server entry point calls it once and passes the resulting settings to the downloader and listener. Node's `--env-file=.env` option loads local values before the application starts, so application code does not need to read `process.env` from multiple modules. The port defaults to `3000`; the Hacker News URL and request timeout must be configured. The downloader accepts settings directly, which lets its tests run without changing the process environment.
+
+## Why use Node's TypeScript support in development
+
+`pnpm dev` runs `src/main.ts` with Node's built-in TypeScript type stripping and watch mode. This avoids a separate development transpiler in a small Node 24 project. `pnpm start` runs the JavaScript emitted by the TypeScript build, keeping development execution separate from the production-style path.
 
 ## Why one download deadline
 
