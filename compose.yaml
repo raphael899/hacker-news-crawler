@@ -1,0 +1,56 @@
+# Local development stack. The credentials below are for a disposable local
+# database only; deployed environments supply DATABASE_URL as a secret.
+name: hn-crawler
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: crawler
+      POSTGRES_PASSWORD: crawler
+      POSTGRES_DB: hn_crawler
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # PostgreSQL 18 images keep their data under /var/lib/postgresql/<major>.
+      - postgres-data:/var/lib/postgresql
+      # Runs once, on an empty volume: creates the hn_crawler_test database.
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crawler -d hn_crawler"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+  app:
+    build:
+      context: .
+      target: runtime
+    environment:
+      PORT: 3000
+      HN_URL: https://news.ycombinator.com/
+      FETCH_TIMEOUT_MS: 5000
+      CACHE_TTL_MS: ${CACHE_TTL_MS:-60000}
+      DATABASE_URL: postgresql://crawler:crawler@postgres:5432/hn_crawler
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Test runner with the PostgreSQL integration tests enabled:
+  #   docker compose run --rm test
+  test:
+    profiles: [test]
+    build:
+      context: .
+      target: test
+    environment:
+      TEST_DATABASE_URL: postgresql://crawler:crawler@postgres:5432/hn_crawler_test
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres-data:

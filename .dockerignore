@@ -1,0 +1,14 @@
+.git
+.github
+node_modules
+dist
+coverage
+data
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-*
+Dockerfile
+compose.yaml
+.dockerignore
