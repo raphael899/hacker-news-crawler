@@ -14,7 +14,9 @@ pnpm build
 
 The PostgreSQL repository tests run when `TEST_DATABASE_URL` is set. They create a unique temporary schema per test and drop only that schema during cleanup; use a disposable database and never point this variable at a production database. When the variable is absent, Vitest skips these integration tests, and `pnpm test:coverage` falls below its thresholds. Locally, run `docker compose run --rm --build test`, which sets the variable for the containerized suite, or run `TEST_DATABASE_URL=postgresql://crawler:crawler@localhost:5432/hn_crawler_test pnpm test:coverage` on the host while the Compose database is up. The `hn_crawler_test` database is created by `docker/postgres/init/` the first time the volume is initialized; if you created the volume before that script existed, recreate it with `docker compose down -v`, which deletes local usage history. GitHub Actions starts PostgreSQL 18 for the CI run and sets `TEST_DATABASE_URL`, so those tests always run there.
 
-The repository integration tests cover schema creation, idempotent startup, persisted success and failure records, newer-schema rejection, and connection-pool cleanup. The remaining tests use deterministic fixtures and clocks and do not depend on a live Hacker News response or wall-clock delays.
+`docker compose run --rm --build test` runs only `pnpm test:coverage`; run `pnpm lint`, `pnpm typecheck`, and `pnpm build` on the host, as CI does.
+
+The repository integration tests cover schema creation, idempotent startup, persisted success and failure records, newer-schema rejection, connection-pool cleanup, and idle connection errors (the last one runs even without a database). `test/architecture.test.ts` walks every file in `src/domain/` and `src/application/` and fails if one imports an external package or an outer layer. The remaining tests use deterministic fixtures and clocks and do not depend on a live Hacker News response or wall-clock delays.
 
 ## Verify usage records locally
 
@@ -31,6 +33,10 @@ docker compose exec postgres psql -U crawler -d hn_crawler -c 'SELECT requested_
 ```
 
 The API also survives a database restart: `docker compose restart postgres` drops pooled connections, the repository logs `PostgreSQL idle connection error`, and the next request succeeds once PostgreSQL is healthy again.
+
+To check a clean shutdown, run `docker compose stop app`. The log ends with `Shutting down`, and `docker inspect -f '{{.State.ExitCode}}' hn-crawler-app-1` prints `0`.
+
+To use `pnpm dev` on the host instead, start only the database with `docker compose up -d postgres`, create `.env.local` from `.env.local.example`, and run `pnpm dev`. The same requests and query apply.
 
 ## Verify the managed database
 
@@ -52,6 +58,14 @@ LIMIT 10;
 ```
 
 Each successful request should add a row containing its request time, snapshot time, filter, result count, cache status, and `success` outcome. Recognized crawler failures also add a row with a null snapshot time, zero results, and an outcome such as `timeout`. If the table is missing, check the service logs for migration errors and confirm that the service is using the expected `DATABASE_URL`.
+
+## Troubleshooting
+
+- **`ECONNREFUSED` on `localhost:5432` when running `pnpm dev`.** Nothing is listening on the port in `.env.local`. Start the Compose database with `docker compose up -d postgres` and check `docker compose ps`. A PostgreSQL container started outside Compose usually publishes a different port and lacks the `hn_crawler` database, so it does not match `.env.local`.
+- **Port `3000` or `5432` already in use.** Set `APP_PORT` or `POSTGRES_PORT` (for example `POSTGRES_PORT=5433 docker compose up -d postgres`), and use the same port in `.env.local`.
+- **`database "hn_crawler_test" does not exist`.** The volume was created before the init script existed. `docker compose down -v` recreates it, but it also deletes local usage history.
+- **`DATABASE_URL must be a PostgreSQL connection URL`.** The env file the command reads (`.env.local` for `pnpm dev`, `.env` for `pnpm start`) is missing `DATABASE_URL` or still contains the old SQLite `DB_PATH`.
+- **`mise WARN missing: node@24.15.0`.** mise reads `.node-version`; run `mise install node@24.15.0`.
 
 ## Measure parser, downloads, and cache hits
 
@@ -78,11 +92,15 @@ Concurrent requests can finish too quickly to reliably demonstrate `coalesced` w
 
 ## Code landmarks
 
-- `src/domain/front-page.ts` enforces the 30-entry snapshot rule; `src/domain/filter.ts` applies the title-length filters and ordering.
+- `src/domain/front-page.ts` enforces the 30-entry snapshot rule; `src/domain/filter.ts` defines the title-length filter strategies and ordering.
 - `src/application/get-entries.use-case.ts` coordinates fetching, snapshot validation, caching, filtering, and usage recording.
-- `src/application/ports/usage-repository.port.ts` defines the application-owned storage contract.
+- `src/application/ports/get-entries.port.ts` is the input port used by the HTTP adapter; `usage-repository.port.ts`, `news-source.port.ts`, and `front-page-cache.port.ts` are the outbound contracts.
+- `src/infrastructure/http/app.ts` validates requests, calls the input port, and exposes cache metadata in response headers.
 - `src/infrastructure/database/postgres-usage-repository.ts` manages the PostgreSQL pool, migrations, and usage writes.
 - `src/infrastructure/cache/in-memory-front-page-cache.ts` handles TTL reuse and in-flight request sharing.
 - `src/infrastructure/hacker-news/hacker-news-news-source.ts` downloads and parses the Hacker News page.
+- `src/infrastructure/config/app-config.ts` validates the environment.
+- `src/main.ts` wires the adapters and closes them on `SIGINT` and `SIGTERM`.
+- `Dockerfile`, `docker-compose.yaml`, and `docker/postgres/init/` define the local containers.
 
 For the reasoning behind these boundaries and technology choices, see [Architecture](architecture.md).

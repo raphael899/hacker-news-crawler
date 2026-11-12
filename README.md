@@ -1,5 +1,7 @@
 # Hacker News Crawler
 
+A TypeScript service that scrapes the first 30 entries of [Hacker News](https://news.ycombinator.com/) (rank, title, points, and comments), filters them by title length, and records every request in PostgreSQL. It exposes one endpoint, `GET /entries`, and follows a hexagonal architecture; see [Architecture](docs/architecture.md) for the design decisions.
+
 ## Quick start with Docker (recommended)
 
 Requirements: [Docker](https://docs.docker.com/get-docker/) with Compose v2. Node.js and PostgreSQL do not need to be installed on the host.
@@ -42,7 +44,7 @@ docker compose run --rm --build test
 
 Stop the stack with `docker compose down`. The usage history is kept in the `postgres-data` volume; `docker compose down -v` deletes it. If ports `3000` or `5432` are taken, set `APP_PORT` or `POSTGRES_PORT`, for example `APP_PORT=3100 docker compose up --build`.
 
-The Compose credentials (`crawler`/`crawler`) are for this disposable local database only.
+The Compose credentials (`crawler`/`crawler`) are for this disposable local database only. `docker compose stop` shuts the API down cleanly: it closes the server and the database pool before exiting.
 
 ## Develop on the host
 
@@ -90,6 +92,20 @@ pnpm start
 
 `pnpm start` writes usage records to the database in `.env`, so run it locally only when you intend to use production data. Never commit `.env` or `.env.local`.
 
+## Configuration
+
+| Variable | Required | Default | Purpose |
+| --- | --- | --- | --- |
+| `HN_URL` | Yes | — | Front page to scrape, normally `https://news.ycombinator.com/` |
+| `FETCH_TIMEOUT_MS` | Yes | — | Deadline for the whole download, in milliseconds |
+| `DATABASE_URL` | Yes | — | PostgreSQL URL (`postgresql://user:password@host:port/database`) |
+| `PORT` | No | `3000` | Port the API listens on |
+| `CACHE_TTL_MS` | No | `60000` | How long a scraped front page is reused |
+| `TEST_DATABASE_URL` | Tests only | — | Disposable database for the PostgreSQL integration tests |
+| `APP_PORT`, `POSTGRES_PORT` | Compose only | `3000`, `5432` | Host ports published by `docker compose` |
+
+On the host, `pnpm dev` loads these from `.env.local` and `pnpm start` from `.env`. In Docker, `docker-compose.yaml` sets them.
+
 ## Run tests on the host
 
 ```sh
@@ -123,8 +139,24 @@ pnpm build
 
 The build writes compiled JavaScript to `dist/`.
 
+## Project structure
+
+```text
+src/
+  domain/            Business rules: entries, word counting, filters, front-page size
+  application/       GetEntries use case and its ports
+  infrastructure/    Adapters: HTTP (Fastify), Hacker News (fetch + Cheerio), cache, PostgreSQL, config
+  main.ts            Composition root and graceful shutdown
+test/                Mirrors src/, plus fixtures and the architecture boundary test
+scripts/benchmark.ts Manual performance benchmark
+docker/postgres/     Init script that creates the test database
+Dockerfile           Multi-stage image (test and runtime targets)
+docker-compose.yaml  Local PostgreSQL, API, and test runner
+```
+
 ## Further reading
 
 - [Architecture and design decisions](docs/architecture.md)
-- [Testing and local verification](docs/testing.md)
+- [Testing and local verification](docs/testing.md), including troubleshooting
+- [Benchmark methodology and live results](docs/benchmark-results.md)
 - [Repository guidance for agents](AGENTS.md)
