@@ -53,16 +53,17 @@ describe('loadConfig', () => {
     })).toEqual({ ...expected, cacheTtlMs: 60_000, port: 3000 });
   });
 
-  it('lists every invalid variable in one ConfigError', () => {
+  it('reports the first invalid variable in a ConfigError', () => {
     expect(() => loadConfig({ PORT: '0' })).toThrow(expect.objectContaining({
       name: 'ConfigError',
-      problems: [
-        'PORT must be a whole number between 1 and 65535',
-        'DATABASE_URL is required',
-        'HN_URL is required',
-        'FETCH_TIMEOUT_MS is required',
-      ],
+      message: 'PORT must be a whole number between 1 and 65535',
     }));
+    expect(() => loadConfig({})).toThrow('DATABASE_URL is required');
+  });
+
+  it('never includes a rejected URL, which may hold a password', () => {
+    expect(() => loadConfig({ ...validEnv, DATABASE_URL: 'mysql://user:hunter2@db/app' }))
+      .toThrow(expect.objectContaining({ message: expect.not.stringContaining('hunter2') }));
   });
 
   it.each([

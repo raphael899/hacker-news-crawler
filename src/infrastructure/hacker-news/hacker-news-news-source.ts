@@ -1,15 +1,14 @@
 import type { NewsSourcePort } from '../../application/ports/news-source.port.ts';
 import type { Entry } from '../../domain/entry.ts';
-import type { HackerNewsConfig } from '../config/app-config.ts';
-import { fetchFrontPage } from './fetch-front-page.ts';
+import { fetchFrontPage, type HackerNewsOptions } from './fetch-front-page.ts';
 import { parseFrontPage } from './parse-front-page.ts';
 
 export class HackerNewsNewsSource implements NewsSourcePort {
-  private readonly config: HackerNewsConfig;
+  private readonly options: HackerNewsOptions;
   private readonly request: typeof fetch;
 
-  constructor(config: HackerNewsConfig, request: typeof fetch = fetch) {
-    this.config = config;
+  constructor(options: HackerNewsOptions, request: typeof fetch = fetch) {
+    this.options = options;
     this.request = request;
   }
 
@@ -17,7 +16,7 @@ export class HackerNewsNewsSource implements NewsSourcePort {
     if (!Number.isSafeInteger(limit) || limit < 1) {
       throw new RangeError('The entry limit must be a positive integer');
     }
-    const html = await fetchFrontPage(this.config, this.request);
+    const html = await fetchFrontPage(this.options, this.request);
     return parseFrontPage(html, limit);
   }
 }

@@ -1,6 +1,6 @@
 # Testing and local verification
 
-Run commands from the repository root. The local setup uses the Docker Compose stack in `docker-compose.yaml`: PostgreSQL 18 with an `hn_crawler` database for the API and an `hn_crawler_test` database for the integration tests. Start the whole stack with `docker compose up --build`, or only the database with `docker compose up -d postgres` when running `pnpm dev` on the host. Copy `.env.local.example` to `.env.local` and run `pnpm dev`; its values already point at that database. `.env` is reserved for the production database used by `pnpm start`. Never commit `.env` or `.env.local` or paste a deployed connection URL into source code.
+Run commands from the repository root. The local setup uses the Docker Compose stack in `docker-compose.yaml`: PostgreSQL 18 with an `hn_crawler` database for the API and an `hn_crawler_test` database for the integration tests. Start the whole stack with `docker compose up --build`, or only the database with `docker compose up -d postgres` when running `pnpm dev` on the host. Copy `.env.example` to `.env.local`, fill it in as the README shows so it points at that database, and run `pnpm dev`. `.env` is reserved for the production database used by `pnpm start`. Never commit `.env` or `.env.local` or paste a deployed connection URL into source code.
 
 ## Automated checks
 
@@ -16,7 +16,7 @@ The PostgreSQL repository tests run when `TEST_DATABASE_URL` is set. They create
 
 `docker compose run --rm --build test` runs only `pnpm test:coverage`; run `pnpm lint`, `pnpm typecheck`, and `pnpm build` on the host, as CI does.
 
-The repository integration tests cover schema creation, idempotent startup, persisted success and failure records, newer-schema rejection, connection-pool cleanup, and idle connection errors (the last one runs even without a database). `test/architecture.test.ts` walks every file in `src/domain/` and `src/application/` and fails if one imports an external package or an outer layer. The remaining tests use deterministic fixtures and clocks and do not depend on a live Hacker News response or wall-clock delays.
+The repository integration tests cover schema creation, repeated startup, adding `duration_ms` to an older table, persisted success and failure records, every filter, cache status, and outcome the code defines, and idle connection errors (the last one runs even without a database). `test/architecture.test.ts` walks every file in `src/domain/` and `src/application/` and fails if one imports an external package or an outer layer. The remaining tests use deterministic fixtures and clocks and do not depend on a live Hacker News response or wall-clock delays.
 
 ## Verify usage records locally
 
@@ -29,42 +29,21 @@ curl -i 'http://localhost:3000/entries'
 Then query the Compose database:
 
 ```sh
-docker compose exec postgres psql -U crawler -d hn_crawler -c 'SELECT requested_at, snapshot_at, filter, outcome, result_count, cache_status FROM usage_records ORDER BY id DESC LIMIT 10;'
+docker compose exec postgres psql -U crawler -d hn_crawler -c 'SELECT requested_at, snapshot_at, filter, outcome, result_count, cache_status, duration_ms FROM usage_records ORDER BY id DESC LIMIT 10;'
 ```
 
 The API also survives a database restart: `docker compose restart postgres` drops pooled connections, the repository logs `PostgreSQL idle connection error`, and the next request succeeds once PostgreSQL is healthy again.
 
 To check a clean shutdown, run `docker compose stop app`. The log ends with `Shutting down`, and `docker inspect -f '{{.State.ExitCode}}' hn-crawler-app-1` prints `0`.
 
-To use `pnpm dev` on the host instead, start only the database with `docker compose up -d postgres`, create `.env.local` from `.env.local.example`, and run `pnpm dev`. The same requests and query apply.
-
-## Verify the managed database
-
-Wait until the database provider reports the instance as available. Confirm that the web service and Render database use the same region before configuring the service with the database's internal URL. The Render free database is for testing/prototyping and expires after 30 days; its dashboard shows the exact expiry date.
-
-For a service using `DATABASE_URL`, make a successful request:
-
-```sh
-curl -i 'https://YOUR-SERVICE.onrender.com/entries'
-```
-
-Then run this query with `psql` connected to the same database:
-
-```sql
-SELECT requested_at, snapshot_at, filter, outcome, result_count, cache_status
-FROM usage_records
-ORDER BY id DESC
-LIMIT 10;
-```
-
-Each successful request should add a row containing its request time, snapshot time, filter, result count, cache status, and `success` outcome. Recognized crawler failures also add a row with a null snapshot time, zero results, and an outcome such as `timeout`. If the table is missing, check the service logs for migration errors and confirm that the service is using the expected `DATABASE_URL`.
+To use `pnpm dev` on the host instead, start only the database with `docker compose up -d postgres`, create `.env.local` as the README shows, and run `pnpm dev`. The same requests and query apply.
 
 ## Troubleshooting
 
 - **`ECONNREFUSED` on `localhost:5432` when running `pnpm dev`.** Nothing is listening on the port in `.env.local`. Start the Compose database with `docker compose up -d postgres` and check `docker compose ps`. A PostgreSQL container started outside Compose usually publishes a different port and lacks the `hn_crawler` database, so it does not match `.env.local`.
 - **Port `3000` or `5432` already in use.** Set `APP_PORT` or `POSTGRES_PORT` (for example `POSTGRES_PORT=5433 docker compose up -d postgres`), and use the same port in `.env.local`.
 - **`database "hn_crawler_test" does not exist`.** The volume was created before the init script existed. `docker compose down -v` recreates it, but it also deletes local usage history.
-- **`DATABASE_URL must be a PostgreSQL connection URL`.** The env file the command reads (`.env.local` for `pnpm dev`, `.env` for `pnpm start`) is missing `DATABASE_URL` or still contains the old SQLite `DB_PATH`.
+- **`DATABASE_URL is required` or `DATABASE_URL must be an absolute postgres: or postgresql: URL`.** The env file the command reads (`.env.local` for `pnpm dev`, `.env` for `pnpm start`) is missing `DATABASE_URL` or has a value without a host and database name.
 - **`mise WARN missing: node@24.15.0`.** mise reads `.node-version`; run `mise install node@24.15.0`.
 
 ## Measure parser, downloads, and cache hits
@@ -96,10 +75,10 @@ Concurrent requests can finish too quickly to reliably demonstrate `coalesced` w
 - `src/application/get-entries.use-case.ts` coordinates fetching, snapshot validation, caching, filtering, and usage recording.
 - `src/application/ports/get-entries.port.ts` is the input port used by the HTTP adapter; `usage-repository.port.ts`, `news-source.port.ts`, and `front-page-cache.port.ts` are the outbound contracts.
 - `src/infrastructure/http/app.ts` validates requests, calls the input port, and exposes cache metadata in response headers.
-- `src/infrastructure/database/postgres-usage-repository.ts` manages the PostgreSQL pool, migrations, and usage writes.
+- `src/infrastructure/database/postgres-usage-repository.ts` manages the PostgreSQL pool, the idempotent schema, and usage writes.
 - `src/infrastructure/cache/in-memory-front-page-cache.ts` handles TTL reuse and in-flight request sharing.
 - `src/infrastructure/hacker-news/hacker-news-news-source.ts` downloads and parses the Hacker News page.
-- `src/infrastructure/config/app-config.ts` declares the environment schema; `env-schema.ts` provides the reusable `integer` and `url` rules and the `ConfigError` that lists every invalid variable.
+- `src/infrastructure/config/app-config.ts` reads and validates every environment variable and throws a `ConfigError` naming the first invalid one.
 - `src/main.ts` wires the adapters and closes them on `SIGINT` and `SIGTERM`.
 - `Dockerfile`, `docker-compose.yaml`, and `docker/postgres/init/` define the local containers.
 

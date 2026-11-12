@@ -1,9 +1,9 @@
 import {
   FrontPageLoadError,
+  type CacheStatus,
   type CachedFrontPage,
   type FrontPageCachePort,
 } from '../../application/ports/front-page-cache.port.ts';
-import type { CacheStatus } from '../../domain/cache-status.ts';
 import type { FrontPage } from '../../domain/front-page.ts';
 
 interface CachedSnapshot {

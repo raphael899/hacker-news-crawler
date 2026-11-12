@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { CrawlerError } from '../../../src/application/ports/crawler-error.ts';
-import { InvalidFrontPageError } from '../../../src/domain/front-page.ts';
 import { parseFrontPage } from '../../../src/infrastructure/hacker-news/parse-front-page.ts';
 
 const html = readFileSync(new URL('../../fixtures/front-page.html', import.meta.url), 'utf8');
@@ -21,7 +20,7 @@ describe('front page parser', () => {
   });
 
   it('rejects a page with fewer than 30 ranked rows', () => {
-    expect(() => parseFrontPage('<table></table>')).toThrow(InvalidFrontPageError);
+    expect(() => parseFrontPage('<table></table>')).toThrow(expect.objectContaining({ outcome: 'invalid_html' }));
   });
 
   it('ignores the 31st entry and rejects a broken entry within the first 30', () => {
