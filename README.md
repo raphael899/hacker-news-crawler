@@ -14,7 +14,7 @@ pnpm install --frozen-lockfile
 cp .env.example .env
 ```
 
-Fill in the values in your local `.env`. Set `HN_URL` to `https://news.ycombinator.com/` and `FETCH_TIMEOUT_MS` to a positive decimal integer in milliseconds. For a five-second deadline, use `5000`. `PORT` is optional and defaults to `3000`. `DB_PATH` is optional and defaults to `./data/hn-crawler.sqlite`; its parent directory is created when the server starts. `CACHE_TTL_MS` is optional and defaults to `60000` (one minute).
+The template already contains working values, so the service starts without further edits. `HN_URL` and `FETCH_TIMEOUT_MS` are required: the template sets them to `https://news.ycombinator.com/` and a five-second deadline (`5000` milliseconds). `PORT` is optional and defaults to `3000`. `DB_PATH` is optional and defaults to `./data/hn-crawler.sqlite`; its parent directory is created when the server starts. `CACHE_TTL_MS` is optional and defaults to `60000` (one minute).
 
 ## Start the service
 
