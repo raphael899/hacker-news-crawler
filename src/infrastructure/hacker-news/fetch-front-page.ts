@@ -1,8 +1,13 @@
 import { CrawlerError } from '../../application/ports/crawler-error.ts';
-import type { HackerNewsConfig } from '../config/app-config.ts';
+
+/** What the Hacker News adapter needs; the configuration module supplies it. */
+export interface HackerNewsOptions {
+  readonly url: string;
+  readonly timeoutMs: number;
+}
 
 export async function fetchFrontPage(
-  { url, timeoutMs }: HackerNewsConfig,
+  { url, timeoutMs }: HackerNewsOptions,
   request = fetch,
 ): Promise<string> {
   const signal = AbortSignal.timeout(timeoutMs);
