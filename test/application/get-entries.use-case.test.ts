@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { GetEntriesUseCase } from '../../src/application/get-entries.use-case.ts';
 import { CrawlerError } from '../../src/application/ports/crawler-error.ts';
 import type { NewsSourcePort } from '../../src/application/ports/news-source.port.ts';
@@ -117,6 +117,30 @@ describe('GetEntriesUseCase', () => {
       { outcome: 'timeout', snapshotAt: null, resultCount: 0, cacheStatus: 'miss' },
       { outcome: 'success', snapshotAt: expect.any(String), resultCount: 30, cacheStatus: 'miss' },
     ]);
+  });
+
+  it('records coalesced failures with their cache status and rethrows the crawler error', async () => {
+    let failDownload: (() => void) | undefined;
+    const source: NewsSourcePort = {
+      fetchTopEntries: vi.fn(() => new Promise<never>((_, reject) => {
+        failDownload = () => reject(new CrawlerError('upstream_error', 'HTTP 503'));
+      })),
+    };
+    const usageRepository = new InMemoryUsageRepository();
+    const useCase = new GetEntriesUseCase(source, new InMemoryFrontPageCache(60_000), usageRepository);
+
+    const first = useCase.execute('long');
+    const second = useCase.execute('short');
+    await vi.waitFor(() => expect(source.fetchTopEntries).toHaveBeenCalledOnce());
+    failDownload?.();
+
+    await expect(first).rejects.toBeInstanceOf(CrawlerError);
+    await expect(second).rejects.toMatchObject({ outcome: 'upstream_error' });
+    expect(usageRepository.records.map(({ filter, cacheStatus, outcome }) => ({ filter, cacheStatus, outcome })))
+      .toEqual([
+        { filter: 'long', cacheStatus: 'miss', outcome: 'upstream_error' },
+        { filter: 'short', cacheStatus: 'coalesced', outcome: 'upstream_error' },
+      ]);
   });
 
   it('propagates usage storage failures to the HTTP adapter', async () => {

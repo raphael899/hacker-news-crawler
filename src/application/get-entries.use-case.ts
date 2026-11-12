@@ -2,7 +2,7 @@ import type { CrawlerOutcome } from '../domain/crawler-outcome.ts';
 import { filterEntries, type EntryFilter } from '../domain/filter.ts';
 import { FrontPage, InvalidFrontPageError } from '../domain/front-page.ts';
 import { CrawlerError } from './ports/crawler-error.ts';
-import type { FrontPageCachePort } from './ports/front-page-cache.port.ts';
+import { FrontPageLoadError, type FrontPageCachePort } from './ports/front-page-cache.port.ts';
 import type { GetEntriesPort, GetEntriesResult } from './ports/get-entries.port.ts';
 import type { NewsSourcePort } from './ports/news-source.port.ts';
 import type { UsageRepositoryPort } from './ports/usage-repository.port.ts';
@@ -34,18 +34,21 @@ export class GetEntriesUseCase implements GetEntriesPort {
         return FrontPage.create(entries);
       });
     } catch (error) {
-      const outcome = getCrawlerOutcome(error);
+      const { cause, cacheStatus } = error instanceof FrontPageLoadError
+        ? { cause: error.cause, cacheStatus: error.cacheStatus }
+        : { cause: error, cacheStatus: 'miss' as const };
+      const outcome = getCrawlerOutcome(cause);
       if (outcome) {
         await this.usageRepository.record({
           requestedAt,
           snapshotAt: null,
           filter,
           resultCount: 0,
-          cacheStatus: 'miss',
+          cacheStatus,
           outcome,
         });
       }
-      throw error;
+      throw cause;
     }
     const entries = filterEntries(snapshot.frontPage.entries, filter);
     await this.usageRepository.record({

@@ -1,4 +1,9 @@
-import type { FrontPageCachePort, CachedFrontPage } from '../../application/ports/front-page-cache.port.ts';
+import {
+  FrontPageLoadError,
+  type CachedFrontPage,
+  type FrontPageCachePort,
+} from '../../application/ports/front-page-cache.port.ts';
+import type { CacheStatus } from '../../domain/cache-status.ts';
 import type { FrontPage } from '../../domain/front-page.ts';
 
 interface CachedSnapshot {
@@ -37,10 +42,7 @@ export class InMemoryFrontPageCache implements FrontPageCachePort {
       return { frontPage, fetchedAt, cacheStatus: 'hit' };
     }
 
-    if (this.inFlight) {
-      const snapshot = await this.inFlight;
-      return { ...snapshot, cacheStatus: 'coalesced' };
-    }
+    if (this.inFlight) return withStatus(this.inFlight, 'coalesced');
 
     const request = Promise.resolve().then(load).then((frontPage) => {
       const snapshot = { frontPage, fetchedAt: this.wallClock().toISOString() };
@@ -50,10 +52,20 @@ export class InMemoryFrontPageCache implements FrontPageCachePort {
     this.inFlight = request;
 
     try {
-      const snapshot = await request;
-      return { ...snapshot, cacheStatus: 'miss' };
+      return await withStatus(request, 'miss');
     } finally {
       if (this.inFlight === request) this.inFlight = undefined;
     }
+  }
+}
+
+async function withStatus(
+  pending: Promise<CachedSnapshot>,
+  cacheStatus: CacheStatus,
+): Promise<CachedFrontPage> {
+  try {
+    return { ...await pending, cacheStatus };
+  } catch (cause) {
+    throw new FrontPageLoadError(cacheStatus, { cause });
   }
 }
