@@ -14,6 +14,14 @@ pnpm build
 
 The cache tests use an injected monotonic clock to check hits and expiration without waiting in real time. The HTTP concurrency test holds the source response behind a promise, sends two requests, and verifies that one source download serves both. This makes the `miss`/`coalesced` behavior repeatable. Tests use fixtures and do not need a live request to Hacker News.
 
+## Performance measurements and live check
+
+Run `pnpm benchmark` from the repository root with `.env` configured. It parses the checked-in HTML fixture repeatedly, makes a few sequential live downloads, then measures repeated use-case calls served from the in-memory cache. Optional positional arguments set parse iterations, cache-hit iterations, and live download samples, in that order; for example, `pnpm benchmark 1000 500 3`. Live samples are spaced by one second. The live check validates that each request returns exactly 30 entries and the cache samples are actual hits. The report includes the runtime, platform, configuration, mean, p50, p95, minimum, and maximum durations.
+
+The timing comparison isolates parser work and application request paths. It uses a no-op usage repository, so download/cache request timings exclude SQLite writes and Fastify overhead. Network timings vary with Hacker News and the local connection; use the recorded environment and sample counts when comparing runs. Never add live benchmark execution to CI.
+
+See [benchmark methodology and live results](benchmark-results.md) for the recorded run.
+
 ## Check SQLite records
 
 Start the service with `pnpm dev`, then make a successful request:

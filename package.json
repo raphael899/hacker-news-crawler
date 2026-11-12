@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "start": "node --env-file=.env dist/main.js",
+    "benchmark": "node --env-file=.env scripts/benchmark.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   },
