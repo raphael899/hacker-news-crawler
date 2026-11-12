@@ -37,5 +37,5 @@ COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist
 USER node
 EXPOSE 3000
-# Configuration comes from the environment (see compose.yaml), not from a .env file.
+# Configuration comes from the environment (see docker-compose.yaml), not from a .env file.
 CMD ["node", "dist/main.js"]

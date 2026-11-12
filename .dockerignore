@@ -10,5 +10,5 @@ data
 *.sqlite
 *.sqlite-*
 Dockerfile
-compose.yaml
+docker-compose.yaml
 .dockerignore

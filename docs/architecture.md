@@ -66,7 +66,7 @@ The repository tracks schema versions in `schema_migrations` and applies pending
 
 ## Why Docker Compose for local development
 
-The service now needs a PostgreSQL server, so a local run depends on more than Node.js. `compose.yaml` starts PostgreSQL 18 (the same major version CI uses) and the API with one command, and the API waits for the database health check before it applies migrations. An init script creates a separate `hn_crawler_test` database, so the repository integration tests run locally against the same engine as in CI instead of being skipped.
+The service now needs a PostgreSQL server, so a local run depends on more than Node.js. `docker-compose.yaml` starts PostgreSQL 18 (the same major version CI uses) and the API with one command, and the API waits for the database health check before it applies migrations. An init script creates a separate `hn_crawler_test` database, so the repository integration tests run locally against the same engine as in CI instead of being skipped.
 
 The `Dockerfile` is multi-stage. The `test` stage contains the full source tree and runs `pnpm test:coverage`; the `runtime` stage contains only the compiled JavaScript and production dependencies and runs as the unprivileged `node` user. pnpm comes from Corepack, so the image uses the version pinned in `package.json`. The runtime image reads its configuration from the environment, which matches how a hosting provider supplies `DATABASE_URL`. The Compose credentials are fixed and local-only; deployed environments supply their own secret URL.
 

@@ -1,5 +1,3 @@
-# Local development stack. The credentials below are for a disposable local
-# database only; deployed environments supply DATABASE_URL as a secret.
 name: hn-crawler
 
 services:
@@ -12,9 +10,7 @@ services:
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      # PostgreSQL 18 images keep their data under /var/lib/postgresql/<major>.
       - postgres-data:/var/lib/postgresql
-      # Runs once, on an empty volume: creates the hn_crawler_test database.
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U crawler -d hn_crawler"]
@@ -39,8 +35,6 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # Test runner with the PostgreSQL integration tests enabled:
-  #   docker compose run --rm test
   test:
     profiles: [test]
     build:
