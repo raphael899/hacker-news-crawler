@@ -20,6 +20,22 @@ let schemaName: string;
 let testPool: Pool;
 let repository: PostgresUsageRepository | undefined;
 
+describe('PostgresUsageRepository pool errors', () => {
+  it('reports idle connection errors instead of crashing the process', async () => {
+    const pool = new Pool({ connectionString: 'postgresql://crawler:crawler@127.0.0.1:1/unused' });
+    const onPoolError = vi.fn();
+    new PostgresUsageRepository(pool, onPoolError);
+    const failure = new Error('terminating connection due to administrator command');
+
+    try {
+      expect(() => pool.emit('error', failure)).not.toThrow();
+      expect(onPoolError).toHaveBeenCalledWith(failure);
+    } finally {
+      await pool.end();
+    }
+  });
+});
+
 describePostgres('PostgresUsageRepository', () => {
   beforeAll(async () => {
     await adminPool.query('SELECT 1');

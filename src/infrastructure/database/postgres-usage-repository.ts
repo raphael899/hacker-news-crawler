@@ -33,8 +33,14 @@ export class PostgresUsageRepository implements UsageRepositoryPort {
   private closed = false;
   private readonly pool: Pool;
 
-  constructor(pool: Pool) {
+  /**
+   * `pg` emits `error` when an idle pooled connection drops (for example, when
+   * PostgreSQL restarts). An unhandled `error` event would crash the process,
+   * so the repository always listens and reports it instead.
+   */
+  constructor(pool: Pool, onPoolError: (error: Error) => void = reportPoolError) {
     this.pool = pool;
+    this.pool.on('error', onPoolError);
   }
 
   static async connect(connectionString: string): Promise<PostgresUsageRepository> {
@@ -146,4 +152,8 @@ export class PostgresUsageRepository implements UsageRepositoryPort {
       client.release();
     }
   }
+}
+
+function reportPoolError(error: Error): void {
+  console.error('PostgreSQL idle connection error', error);
 }

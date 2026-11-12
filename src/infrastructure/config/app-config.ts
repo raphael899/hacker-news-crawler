@@ -65,6 +65,7 @@ function parseFetchTimeoutMs(rawValue: string | undefined): number {
   const value = rawValue?.trim() ?? '';
   const timeoutMs = Number(value);
 
+  // Node.js timers use a positive signed 32-bit delay.
   if (!/^[0-9]+$/.test(value) || timeoutMs < 1 || timeoutMs > 2 ** 31 - 1) {
     throw new Error('FETCH_TIMEOUT_MS must be a positive decimal integer within the Node.js timer range');
   }
