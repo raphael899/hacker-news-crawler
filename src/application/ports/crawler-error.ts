@@ -1,4 +1,6 @@
-import type { CrawlerOutcome } from '../../domain/crawler-outcome.ts';
+export const CRAWLER_OUTCOMES = ['upstream_error', 'timeout', 'invalid_html'] as const;
+
+export type CrawlerOutcome = typeof CRAWLER_OUTCOMES[number];
 
 export class CrawlerError extends Error {
   readonly outcome: CrawlerOutcome;

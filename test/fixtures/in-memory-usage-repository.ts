@@ -1,5 +1,4 @@
-import type { UsageRepositoryPort } from '../../src/application/ports/usage-repository.port.ts';
-import type { UsageRecord } from '../../src/domain/usage-record.ts';
+import type { UsageRecord, UsageRepositoryPort } from '../../src/application/ports/usage-repository.port.ts';
 
 export class InMemoryUsageRepository implements UsageRepositoryPort {
   readonly records: UsageRecord[] = [];

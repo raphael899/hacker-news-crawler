@@ -1,8 +1,6 @@
 import { Pool } from 'pg';
-import type { UsageRepositoryPort } from '../../application/ports/usage-repository.port.ts';
-import { CACHE_STATUSES } from '../../domain/cache-status.ts';
-import { USAGE_OUTCOMES } from '../../domain/crawler-outcome.ts';
-import type { UsageRecord } from '../../domain/usage-record.ts';
+import { CACHE_STATUSES } from '../../application/ports/front-page-cache.port.ts';
+import { USAGE_OUTCOMES, type UsageRecord, type UsageRepositoryPort } from '../../application/ports/usage-repository.port.ts';
 
 interface Migration {
   readonly version: number;

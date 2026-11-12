@@ -1,4 +1,4 @@
-import type { CacheStatus } from '../../domain/cache-status.ts';
+import type { CacheStatus } from './front-page-cache.port.ts';
 import type { Entry } from '../../domain/entry.ts';
 import type { EntryFilter } from '../../domain/filter.ts';
 
