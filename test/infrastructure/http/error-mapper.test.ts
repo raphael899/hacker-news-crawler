@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildApp } from '../../../src/infrastructure/http/app.ts';
 import { GetEntriesUseCase } from '../../../src/application/get-entries.use-case.ts';
 import { CrawlerError } from '../../../src/application/ports/crawler-error.ts';
+import { InMemoryUsageRepository } from '../../fixtures/in-memory-usage-repository.ts';
 
 describe('HTTP error handling', () => {
   it.each([
@@ -14,7 +15,7 @@ describe('HTTP error handling', () => {
       async fetchTopEntries() {
         throw failure;
       },
-    });
+    }, new InMemoryUsageRepository());
     const app = buildApp(useCase);
 
     try {

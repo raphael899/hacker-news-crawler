@@ -5,17 +5,24 @@ export interface HackerNewsConfig {
 
 export interface AppConfig {
   readonly port: number;
+  readonly databasePath: string;
   readonly hackerNews: HackerNewsConfig;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   return {
     port: parsePort(env.PORT),
+    databasePath: parseDatabasePath(env.DB_PATH),
     hackerNews: {
       url: parseHackerNewsUrl(env.HN_URL),
       timeoutMs: parseFetchTimeoutMs(env.FETCH_TIMEOUT_MS),
     },
   };
+}
+
+function parseDatabasePath(rawValue: string | undefined): string {
+  const value = rawValue?.trim();
+  return value || './data/hn-crawler.sqlite';
 }
 
 function parsePort(rawValue: string | undefined): number {

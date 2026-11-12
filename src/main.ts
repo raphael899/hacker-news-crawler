@@ -1,12 +1,15 @@
 import { GetEntriesUseCase } from './application/get-entries.use-case.ts';
 import { loadConfig } from './infrastructure/config/app-config.ts';
 import { buildApp } from './infrastructure/http/app.ts';
+import { SQLiteUsageRepository } from './infrastructure/database/sqlite-usage-repository.ts';
 import { HackerNewsNewsSource } from './infrastructure/hacker-news/hacker-news-news-source.ts';
 
 const config = loadConfig();
 const newsSource = new HackerNewsNewsSource(config.hackerNews);
-const getEntries = new GetEntriesUseCase(newsSource);
+const usageRepository = new SQLiteUsageRepository(config.databasePath);
+const getEntries = new GetEntriesUseCase(newsSource, usageRepository);
 const app = buildApp(getEntries, true);
+app.addHook('onClose', async () => usageRepository.close());
 
 try {
   await app.listen({ port: config.port, host: '0.0.0.0' });
