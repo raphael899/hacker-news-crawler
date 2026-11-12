@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../../../src/infrastructure/config/app-config.ts';
 
 describe('loadConfig', () => {
-  const validEnv = { HN_URL: 'https://origin.test', FETCH_TIMEOUT_MS: ' 5000 ' };
-  const expected = { hackerNews: { url: 'https://origin.test/', timeoutMs: 5000 } };
+  const validEnv = { PORT: '4123', HN_URL: 'https://origin.test', FETCH_TIMEOUT_MS: ' 5000 ' };
+  const expected = { port: 4123, hackerNews: { url: 'https://origin.test/', timeoutMs: 5000 } };
 
   afterEach(() => vi.unstubAllEnvs());
 
@@ -12,14 +12,24 @@ describe('loadConfig', () => {
   });
 
   it('uses the process environment by default', () => {
+    vi.stubEnv('PORT', validEnv.PORT);
     vi.stubEnv('HN_URL', validEnv.HN_URL);
     vi.stubEnv('FETCH_TIMEOUT_MS', validEnv.FETCH_TIMEOUT_MS);
     expect(loadConfig()).toEqual(expected);
   });
 
+  it('defaults the port to 3000 when PORT is blank or absent', () => {
+    expect(loadConfig({ ...validEnv, PORT: '' })).toEqual({ ...expected, port: 3000 });
+    expect(loadConfig({ HN_URL: validEnv.HN_URL, FETCH_TIMEOUT_MS: validEnv.FETCH_TIMEOUT_MS }))
+      .toEqual({ ...expected, port: 3000 });
+  });
+
   it.each([
     ['HN_URL', undefined],
     ['HN_URL', 'file:///tmp/front-page.html'],
+    ['PORT', '0'],
+    ['PORT', '65536'],
+    ['PORT', '3.5'],
     ['FETCH_TIMEOUT_MS', undefined],
     ['FETCH_TIMEOUT_MS', '0'],
     ['FETCH_TIMEOUT_MS', '1e3'],

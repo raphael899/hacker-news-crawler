@@ -14,11 +14,30 @@ pnpm install --frozen-lockfile
 cp .env.example .env
 ```
 
-Fill in the values in your local `.env`. Set `HN_URL` to `https://news.ycombinator.com/` and `FETCH_TIMEOUT_MS` to a positive decimal integer in milliseconds. For a five-second deadline, use `5000`. `PORT`, `CACHE_TTL_MS`, and `DB_PATH` are reserved for the upcoming server, cache, and storage integrations.
+Fill in the values in your local `.env`. Set `HN_URL` to `https://news.ycombinator.com/` and `FETCH_TIMEOUT_MS` to a positive decimal integer in milliseconds. For a five-second deadline, use `5000`. `PORT` is optional and defaults to `3000`. `CACHE_TTL_MS` and `DB_PATH` are reserved for upcoming cache and storage integrations.
 
 ## Start the service
 
-The HTTP adapter currently runs through the test suite. Starting a standalone server requires connecting the Hacker News downloader and parser to the route.
+For development, start the TypeScript server with Node's watch mode:
+
+```sh
+pnpm dev
+```
+
+For a production-style run, compile and start the generated JavaScript:
+
+```sh
+pnpm build
+pnpm start
+```
+
+The server listens on `PORT` (default `3000`). Request the first 30 entries with:
+
+```sh
+curl http://localhost:3000/entries
+```
+
+The optional `filter` query parameter defaults to `all`; unsupported values receive a `400` response. Hacker News failures receive `502`, and download timeouts receive `504`.
 
 ## Run tests
 
