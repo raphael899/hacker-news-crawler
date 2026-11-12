@@ -3,21 +3,18 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@10.24.0",
   "engines": {
     "node": ">=24.15.0 <25"
   },
   "scripts": {
-    "dev": "node --env-file-if-exists=.env --watch src/index.ts",
-    "start": "node --env-file-if-exists=.env dist/index.js",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
-    "benchmark": "node scripts/benchmark.mjs"
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "cheerio": "1.2.0",
     "fastify": "5.12.8"
   },
   "devDependencies": {
