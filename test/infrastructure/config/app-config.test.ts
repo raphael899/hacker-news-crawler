@@ -4,14 +4,14 @@ import { loadConfig } from '../../../src/infrastructure/config/app-config.ts';
 describe('loadConfig', () => {
   const validEnv = {
     PORT: '4123',
-    DB_PATH: 'tmp/usage.sqlite',
+    DATABASE_URL: 'postgresql://crawler:secret@localhost:5432/hn_crawler',
     CACHE_TTL_MS: ' 45000 ',
     HN_URL: 'https://origin.test',
     FETCH_TIMEOUT_MS: ' 5000 ',
   };
   const expected = {
     port: 4123,
-    databasePath: 'tmp/usage.sqlite',
+    databaseUrl: 'postgresql://crawler:secret@localhost:5432/hn_crawler',
     cacheTtlMs: 45000,
     hackerNews: { url: 'https://origin.test/', timeoutMs: 5000 },
   };
@@ -24,7 +24,7 @@ describe('loadConfig', () => {
 
   it('uses the process environment by default', () => {
     vi.stubEnv('PORT', validEnv.PORT);
-    vi.stubEnv('DB_PATH', validEnv.DB_PATH);
+    vi.stubEnv('DATABASE_URL', validEnv.DATABASE_URL);
     vi.stubEnv('CACHE_TTL_MS', validEnv.CACHE_TTL_MS);
     vi.stubEnv('HN_URL', validEnv.HN_URL);
     vi.stubEnv('FETCH_TIMEOUT_MS', validEnv.FETCH_TIMEOUT_MS);
@@ -33,14 +33,15 @@ describe('loadConfig', () => {
 
   it('defaults the port to 3000 when PORT is blank or absent', () => {
     expect(loadConfig({ ...validEnv, PORT: '' })).toEqual({ ...expected, port: 3000 });
-    expect(loadConfig({ HN_URL: validEnv.HN_URL, FETCH_TIMEOUT_MS: validEnv.FETCH_TIMEOUT_MS }))
-      .toEqual({ ...expected, databasePath: './data/hn-crawler.sqlite', cacheTtlMs: 60_000, port: 3000 });
+    expect(loadConfig({ HN_URL: validEnv.HN_URL, FETCH_TIMEOUT_MS: validEnv.FETCH_TIMEOUT_MS,
+      DATABASE_URL: validEnv.DATABASE_URL }))
+      .toEqual({ ...expected, cacheTtlMs: 60_000, port: 3000 });
   });
 
-  it('defaults the database path when DB_PATH is blank or absent', () => {
-    expect(loadConfig({ ...validEnv, DB_PATH: '' })).toEqual({ ...expected, databasePath: './data/hn-crawler.sqlite' });
-    expect(loadConfig({ HN_URL: validEnv.HN_URL, FETCH_TIMEOUT_MS: validEnv.FETCH_TIMEOUT_MS }))
-      .toEqual({ ...expected, databasePath: './data/hn-crawler.sqlite', cacheTtlMs: 60_000, port: 3000 });
+  it('requires a PostgreSQL connection URL', () => {
+    expect(() => loadConfig({ ...validEnv, DATABASE_URL: '' })).toThrow('DATABASE_URL');
+    expect(() => loadConfig({ HN_URL: validEnv.HN_URL, FETCH_TIMEOUT_MS: validEnv.FETCH_TIMEOUT_MS }))
+      .toThrow('DATABASE_URL');
   });
 
   it('defaults cache TTL to 60 seconds when CACHE_TTL_MS is blank or absent', () => {
@@ -48,17 +49,27 @@ describe('loadConfig', () => {
     expect(loadConfig({
       HN_URL: validEnv.HN_URL,
       FETCH_TIMEOUT_MS: validEnv.FETCH_TIMEOUT_MS,
-    })).toEqual({
-      ...expected,
-      databasePath: './data/hn-crawler.sqlite',
-      cacheTtlMs: 60_000,
-      port: 3000,
-    });
+      DATABASE_URL: validEnv.DATABASE_URL,
+    })).toEqual({ ...expected, cacheTtlMs: 60_000, port: 3000 });
+  });
+
+  it('lists every invalid variable in one ConfigError', () => {
+    expect(() => loadConfig({ PORT: '0' })).toThrow(expect.objectContaining({
+      name: 'ConfigError',
+      problems: [
+        'PORT must be a whole number between 1 and 65535',
+        'DATABASE_URL is required',
+        'HN_URL is required',
+        'FETCH_TIMEOUT_MS is required',
+      ],
+    }));
   });
 
   it.each([
     ['HN_URL', undefined],
     ['HN_URL', 'file:///tmp/front-page.html'],
+    ['DATABASE_URL', 'https://database.example/hn_crawler'],
+    ['DATABASE_URL', 'postgresql://localhost'],
     ['PORT', '0'],
     ['PORT', '65536'],
     ['PORT', '3.5'],

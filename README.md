@@ -1,74 +1,133 @@
 # Hacker News Crawler
 
-## Requirements
+A TypeScript service that scrapes the first 30 entries of [Hacker News](https://news.ycombinator.com/) (rank, title, points, and comments), filters them by title length, and records every request in PostgreSQL. It exposes one endpoint, `GET /entries`, and follows a hexagonal architecture; see [Architecture](docs/architecture.md) for the design decisions.
 
-- Node.js 24.15.0
-- [pnpm](https://pnpm.io/installation) 10.24.0
+## Quick start with Docker (recommended)
 
-## Install and configure
+Requirements: [Docker](https://docs.docker.com/get-docker/) with Compose v2. Node.js and PostgreSQL do not need to be installed on the host.
 
-Run these commands from the repository root:
+Start PostgreSQL 18 and the API from the repository root:
+
+```sh
+docker compose up --build
+```
+
+The API waits until PostgreSQL is healthy, applies the versioned migrations, and listens on `http://localhost:3000`. Request the first 30 entries:
+
+```sh
+curl -i http://localhost:3000/entries
+```
+
+```sh
+curl 'http://localhost:3000/entries?filter=long'
+```
+
+```sh
+curl 'http://localhost:3000/entries?filter=short'
+```
+
+The optional `filter` query parameter defaults to `all`. Use `long` to select titles with more than five words, ordered by comment count, or `short` to select titles with five words or fewer, ordered by points. Both orders are descending, with rank ascending to break ties. Unsupported filter values receive a `400` response. Hacker News failures receive `502`, and download timeouts receive `504`.
+
+The response includes `X-Front-Page-Fetched-At` (the shared snapshot timestamp) and `X-Cache-Status` (`miss`, `coalesced`, or `hit`). The in-memory cache is shared by requests handled by the same server process.
+
+Successful requests and recognized crawler failures are recorded in PostgreSQL with their UTC request timestamp, filter, outcome, result count, snapshot timestamp, and cache status. Outcomes are `success`, `upstream_error`, `timeout`, and `invalid_html`; failed requests have a `NULL` snapshot timestamp and a result count of zero. Inspect the latest records:
+
+```sh
+docker compose exec postgres psql -U crawler -d hn_crawler -c 'SELECT requested_at, snapshot_at, filter, outcome, result_count, cache_status FROM usage_records ORDER BY id DESC LIMIT 10;'
+```
+
+Run the whole test suite, including the PostgreSQL integration tests, in a container:
+
+```sh
+docker compose run --rm --build test
+```
+
+Stop the stack with `docker compose down`. The usage history is kept in the `postgres-data` volume; `docker compose down -v` deletes it. If ports `3000` or `5432` are taken, set `APP_PORT` or `POSTGRES_PORT`, for example `APP_PORT=3100 docker compose up --build`.
+
+The Compose credentials (`crawler`/`crawler`) are for this disposable local database only. `docker compose stop` shuts the API down cleanly: it closes the server and the database pool before exiting.
+
+## Develop on the host
+
+Requirements: Node.js 24.15.0 and [pnpm](https://pnpm.io/installation) 10.24.0. The project uses two environment files, both ignored by Git:
+
+| File | Template | Database | Used by |
+| --- | --- | --- | --- |
+| `.env.local` | `.env.local.example` | Local Docker Compose PostgreSQL | `pnpm dev`, `pnpm benchmark` |
+| `.env` | `.env.example` | Production PostgreSQL | `pnpm start` |
+
+Start only the database in Docker, then install dependencies and create `.env.local`:
+
+```sh
+docker compose up -d postgres
+```
 
 ```sh
 pnpm install --frozen-lockfile
-cp .env.example .env
 ```
 
-The template already contains working values, so the service starts without further edits. `HN_URL` and `FETCH_TIMEOUT_MS` are required: the template sets them to `https://news.ycombinator.com/` and a five-second deadline (`5000` milliseconds). `PORT` is optional and defaults to `3000`. `DB_PATH` is optional and defaults to `./data/hn-crawler.sqlite`; its parent directory is created when the server starts. `CACHE_TTL_MS` is optional and defaults to `60000` (one minute).
+```sh
+cp .env.local.example .env.local
+```
 
-## Start the service
+The local template already points `DATABASE_URL` at the Compose database (`postgresql://crawler:crawler@localhost:5432/hn_crawler`), so it works without edits. `HN_URL`, `FETCH_TIMEOUT_MS`, and `DATABASE_URL` are required. `PORT` defaults to `3000`, and `CACHE_TTL_MS` defaults to `60000` (one minute).
 
-For development, start the TypeScript server with Node's watch mode:
+Start the TypeScript server with Node's watch mode, using `.env.local`:
 
 ```sh
 pnpm dev
 ```
 
-For a production-style run, compile and start the generated JavaScript:
+`npm run dev` works as well; the script only calls `node`.
+
+For a production-style run, create `.env` from `.env.example`, set `DATABASE_URL` to the production database, then compile and start the generated JavaScript:
+
+```sh
+cp .env.example .env
+```
 
 ```sh
 pnpm build
 pnpm start
 ```
 
-The server listens on `PORT` (default `3000`). Request the first 30 entries with:
+`pnpm start` writes usage records to the database in `.env`, so run it locally only when you intend to use production data. Never commit `.env` or `.env.local`.
 
-```sh
-curl http://localhost:3000/entries
-```
+## Configuration
 
-The optional `filter` query parameter defaults to `all`. Use `long` to select titles with more than five words, ordered by comment count, or `short` to select titles with five words or fewer, ordered by points. Both orders are descending, with rank ascending to break ties. Unsupported filter values receive a `400` response. Hacker News failures receive `502`, and download timeouts receive `504`.
+| Variable | Required | Default | Purpose |
+| --- | --- | --- | --- |
+| `HN_URL` | Yes | — | Front page to scrape, normally `https://news.ycombinator.com/` |
+| `FETCH_TIMEOUT_MS` | Yes | — | Deadline for the whole download, in milliseconds |
+| `DATABASE_URL` | Yes | — | PostgreSQL URL (`postgresql://user:password@host:port/database`) |
+| `PORT` | No | `3000` | Port the API listens on |
+| `CACHE_TTL_MS` | No | `60000` | How long a scraped front page is reused |
+| `TEST_DATABASE_URL` | Tests only | — | Disposable database for the PostgreSQL integration tests |
+| `APP_PORT`, `POSTGRES_PORT` | Compose only | `3000`, `5432` | Host ports published by `docker compose` |
 
-Successful requests and recognized crawler failures are recorded in SQLite with their UTC request timestamp, filter, outcome, result count, snapshot timestamp, and cache status. The database is stored at `DB_PATH` or, by default, `./data/hn-crawler.sqlite`.
+On the host, `pnpm dev` loads these from `.env.local` and `pnpm start` from `.env`. In Docker, `docker-compose.yaml` sets them.
 
-Outcomes are `success`, `upstream_error`, `timeout`, and `invalid_html`. Failed crawler requests have a `NULL` snapshot timestamp and a result count of zero.
-
-Inspect the latest recorded requests with the SQLite CLI (adjust the path if you set a custom `DB_PATH`):
-
-```sh
-sqlite3 ./data/hn-crawler.sqlite \
-  'SELECT requested_at, snapshot_at, filter, outcome, result_count, cache_status FROM usage_records ORDER BY id DESC LIMIT 10;'
-```
-
-The response includes `X-Front-Page-Fetched-At` (the shared snapshot timestamp) and `X-Cache-Status` (`miss`, `coalesced`, or `hit`). The in-memory cache is shared by requests handled by the same server process.
-
-```sh
-curl 'http://localhost:3000/entries?filter=long'
-curl 'http://localhost:3000/entries?filter=short'
-```
-
-## Run tests
+## Run tests on the host
 
 ```sh
 pnpm test
 pnpm test:coverage
 ```
 
-Use `pnpm test` to run the suite once and `pnpm test:coverage` to check it against the configured coverage thresholds. Test directories mirror `src/`.
+The PostgreSQL repository tests run only when `TEST_DATABASE_URL` is set; otherwise Vitest skips them and `pnpm test:coverage` falls below its thresholds. With the Compose database running, use its `hn_crawler_test` database:
+
+```sh
+TEST_DATABASE_URL=postgresql://crawler:crawler@localhost:5432/hn_crawler_test pnpm test:coverage
+```
+
+GitHub Actions starts its own PostgreSQL service for each CI run. The suite uses saved Hacker News HTML fixtures and does not make live requests to the site.
+
+## Deploy with managed PostgreSQL
+
+The service only needs `DATABASE_URL` and the Hacker News settings from the environment. The runtime image (`docker build --target runtime .`) reads them from its environment, not from a `.env` file. On Render, use the database's internal connection URL for a web service in the same region. Free Render PostgreSQL instances are intended for testing and expire after 30 days; check the dashboard for the exact date.
 
 ## Measure parser, downloads, and cache hits
 
-With `.env` configured, run `pnpm benchmark`. See [benchmark methodology and live results](docs/benchmark-results.md). The benchmark makes a small number of live requests to Hacker News, so run it manually and outside CI.
+With `.env.local` configured, run `pnpm benchmark`. See [benchmark methodology and live results](docs/benchmark-results.md). The benchmark makes a small number of live requests to Hacker News, so run it manually and outside CI.
 
 ## Lint, check types, and build
 
@@ -80,8 +139,24 @@ pnpm build
 
 The build writes compiled JavaScript to `dist/`.
 
+## Project structure
+
+```text
+src/
+  domain/            Business rules: entries, word counting, filters, front-page size
+  application/       GetEntries use case and its ports
+  infrastructure/    Adapters: HTTP (Fastify), Hacker News (fetch + Cheerio), cache, PostgreSQL, config
+  main.ts            Composition root and graceful shutdown
+test/                Mirrors src/, plus fixtures and the architecture boundary test
+scripts/benchmark.ts Manual performance benchmark
+docker/postgres/     Init script that creates the test database
+Dockerfile           Multi-stage image (test and runtime targets)
+docker-compose.yaml  Local PostgreSQL, API, and test runner
+```
+
 ## Further reading
 
 - [Architecture and design decisions](docs/architecture.md)
-- [Testing and local verification](docs/testing.md)
+- [Testing and local verification](docs/testing.md), including troubleshooting
+- [Benchmark methodology and live results](docs/benchmark-results.md)
 - [Repository guidance for agents](AGENTS.md)

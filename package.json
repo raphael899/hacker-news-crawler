@@ -9,21 +9,23 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "dev": "node --watch --env-file=.env src/main.ts",
+    "dev": "node --watch --env-file=.env.local src/main.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "start": "node --env-file=.env dist/main.js",
-    "benchmark": "node --env-file=.env scripts/benchmark.ts",
+    "benchmark": "node --env-file=.env.local scripts/benchmark.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "cheerio": "1.2.0",
-    "fastify": "5.12.8"
+    "fastify": "5.12.8",
+    "pg": "8.23.1"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
     "@types/node": "24.19.2",
+    "@types/pg": "8.23.1",
     "@vitest/coverage-v8": "4.1.12",
     "eslint": "9.39.5",
     "typescript": "5.9.3",
