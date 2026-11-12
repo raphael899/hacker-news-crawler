@@ -14,6 +14,17 @@ describe('front page parser', () => {
     expect(entries[20]).toMatchObject({ points: 0, comments: 0 });
   });
 
+  it('keeps a job with an external title link in the first 30 entries', () => {
+    const jobHtml = html.replace(
+      'href="item?id=50452404">Reliable systems',
+      'href="https://example.com/careers">Hiring a software engineer',
+    );
+    const entries = parseFrontPage(jobHtml);
+
+    expect(entries).toHaveLength(30);
+    expect(entries[20]).toEqual({ rank: 21, title: 'Hiring a software engineer', points: 0, comments: 0 });
+  });
+
   it('accepts singular points and comments', () => {
     const entries = parseFrontPage(html.replace('213 points', '1 point').replace('57&nbsp;comments', '1 comment'));
     expect(entries[0]).toMatchObject({ points: 1, comments: 1 });

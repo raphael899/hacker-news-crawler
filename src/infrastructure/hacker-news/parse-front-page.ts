@@ -21,8 +21,7 @@ export function parseFrontPage(html: string, limit: number = FrontPage.entryCoun
 
 function parseEntry($: CheerioAPI, story: Selection, rank: number, seenIds: Set<string>): Entry {
   const id = story.attr('id');
-  const titleLink = story.find('.titleline > a').first();
-  const title = titleLink.text().trim();
+  const title = story.find('.titleline > a').first().text().trim();
   const rankText = story.find('.rank').text().trim();
   if (!id || seenIds.has(id) || rankText !== `${rank}.` || !title) {
     throw invalidEntry(rank, 'invalid identity, rank, or title');
@@ -35,7 +34,7 @@ function parseEntry($: CheerioAPI, story: Selection, rank: number, seenIds: Set<
     throw invalidEntry(rank, 'missing or mismatched metadata');
   }
 
-  if (isJobPosting(story, metadata, titleLink, itemUrl)) {
+  if (isJobPosting(story, metadata)) {
     return { rank, title, points: 0, comments: 0 };
   }
 
@@ -48,13 +47,12 @@ function parseEntry($: CheerioAPI, story: Selection, rank: number, seenIds: Set<
   return { rank, title, points, comments };
 }
 
-function isJobPosting(story: Selection, metadata: Selection, titleLink: Selection, itemUrl: string): boolean {
+function isJobPosting(story: Selection, metadata: Selection): boolean {
   const spacerImage = story.children('td').eq(1).children('img').attr('src');
   return metadata.children('.subline').length === 0 &&
     metadata.find('.score').length === 0 &&
     story.find('.votelinks').length === 0 &&
-    spacerImage === 's.gif' &&
-    titleLink.attr('href') === itemUrl;
+    spacerImage === 's.gif';
 }
 
 function parsePoints(subline: Selection, id: string): number | undefined {
