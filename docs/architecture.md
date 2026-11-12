@@ -12,11 +12,13 @@ flowchart LR
   UseCase --> Domain[Domain types and rules]
   UseCase --> SourcePort[News source port]
   HN[Hacker News adapter] -. implements .-> SourcePort
+  UseCase --> CachePort[Front-page cache port]
+  Cache[In-memory cache adapter] -. implements .-> CachePort
   UseCase --> UsagePort[Usage repository port]
   SQLite[SQLite adapter] -. implements .-> UsagePort
 ```
 
-Dependencies point inward. The domain defines the entry and usage-record shapes, the filter rules, and the front-page size rule. The application requests entries through the news source port, validates and filters the result, and records usage through the usage repository port. Fastify is the inbound adapter. The Hacker News infrastructure downloads and parses HTML; the SQLite adapter writes usage records.
+Dependencies point inward. The domain defines entry and usage-record shapes, cache statuses, filter rules, and the front-page size rule. The application requests entries through the news source and cache ports, filters the validated snapshot, and records usage through the usage repository port. Fastify is the inbound adapter. The Hacker News infrastructure downloads and parses HTML; the in-memory cache shares snapshots and coalesces concurrent loads; SQLite writes usage records.
 
 The source tree groups business concepts under `src/domain/`, use cases and their contracts under `src/application/`, and concrete adapters under `src/infrastructure/`. The ports live in `src/application/ports/` because the use case defines the capabilities it needs. The HTTP adapter, Hacker News downloader, database, and environment configuration each have a folder in infrastructure.
 
@@ -87,3 +89,9 @@ The news source port defines errors in terms of the operation that failed. Fasti
 ## Why filtering runs after the front-page validation
 
 The use case first verifies that the source returned exactly 30 entries, then applies the requested domain filter. The `long` and `short` predicates are complementary (`> 5` and `<= 5`), so every source entry belongs to exactly one group. Long titles sort by comments and short titles by points, both descending, with the original rank as a deterministic tie-breaker. The `all` filter preserves the source order.
+
+## Why the front-page cache is shared in memory
+
+All filters operate on the same first 30 entries, so the cache stores the validated front-page snapshot before filtering. A successful load is reused for the configured TTL (60 seconds by default). Concurrent requests arriving during an empty or expired cache share one in-flight promise; their records distinguish the loader (`miss`), concurrent waiters (`coalesced`), and later reuse (`hit`). The cache uses a monotonic clock for expiration and a wall-clock ISO timestamp for the snapshot. The endpoint returns that shared timestamp in `X-Front-Page-Fetched-At` while keeping the JSON body as the entry array. `CACHE_TTL_MS` can tune the TTL without changing code.
+
+The usage table's schema version 2 adds `snapshot_at` and `cache_status` through a migration, preserving existing request history. Older records have no known snapshot timestamp and retain `miss` as their default cache status.

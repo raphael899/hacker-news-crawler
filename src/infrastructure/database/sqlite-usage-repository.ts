@@ -2,12 +2,14 @@ import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { DatabaseSync, type StatementSync } from 'node:sqlite';
 import type { UsageRepositoryPort } from '../../application/ports/usage-repository.port.ts';
+import { CACHE_STATUSES } from '../../domain/cache-status.ts';
 import type { UsageRecord } from '../../domain/usage-record.ts';
 
 type Migration = (database: DatabaseSync) => void;
 
 const migrations: readonly Migration[] = [
   createUsageRecordsTable,
+  addCacheMetadataColumns,
 ];
 
 export class SQLiteUsageRepository implements UsageRepositoryPort {
@@ -24,8 +26,8 @@ export class SQLiteUsageRepository implements UsageRepositoryPort {
     try {
       migrateDatabase(database);
       const insertStatement = database.prepare(`
-        INSERT INTO usage_records (requested_at, filter, result_count)
-        VALUES (?, ?, ?)
+        INSERT INTO usage_records (requested_at, snapshot_at, filter, result_count, cache_status)
+        VALUES (?, ?, ?, ?, ?)
       `);
       this.database = database;
       this.insertStatement = insertStatement;
@@ -46,8 +48,10 @@ export class SQLiteUsageRepository implements UsageRepositoryPort {
   record(usageRecord: UsageRecord): void {
     this.insertStatement.run(
       usageRecord.requestedAt,
+      usageRecord.snapshotAt,
       usageRecord.filter,
       usageRecord.resultCount,
+      usageRecord.cacheStatus,
     );
   }
 
@@ -119,4 +123,13 @@ function createUsageRecordsTable(database: DatabaseSync): void {
   if (missingColumns.length > 0) {
     throw new Error(`Existing usage_records table is missing columns: ${missingColumns.join(', ')}`);
   }
+}
+
+function addCacheMetadataColumns(database: DatabaseSync): void {
+  const allowedStatuses = CACHE_STATUSES.map((status) => `'${status}'`).join(', ');
+  database.exec(`
+    ALTER TABLE usage_records ADD COLUMN snapshot_at TEXT;
+    ALTER TABLE usage_records ADD COLUMN cache_status TEXT NOT NULL DEFAULT 'miss'
+      CHECK (cache_status IN (${allowedStatuses}));
+  `);
 }
