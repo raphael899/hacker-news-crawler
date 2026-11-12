@@ -18,7 +18,7 @@ Set `HN_URL` to the front-page URL and `FETCH_TIMEOUT_MS` to the download deadli
 
 ## Start the service
 
-The HTTP adapter currently runs through the test suite. Starting a standalone server requires connecting the Hacker News parser to the route.
+The HTTP adapter currently runs through the test suite. Starting a standalone server requires connecting the Hacker News downloader and parser to the route.
 
 ## Run tests
 
