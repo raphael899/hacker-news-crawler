@@ -7,11 +7,11 @@ function invalidEntry(rank: number, reason: string): never {
   throw new CrawlerError('invalid_html', `Entry ${rank}: ${reason}`);
 }
 
-export function parseFrontPage(html: string): readonly Entry[] {
+export function parseFrontPage(html: string, limit: number = FrontPage.entryCount): readonly Entry[] {
   const $ = load(html);
-  const rows = $('tr.athing').slice(0, FrontPage.entryCount).toArray();
-  if (rows.length !== FrontPage.entryCount) {
-    throw new InvalidFrontPageError(FrontPage.entryCount, rows.length);
+  const rows = $('tr.athing').slice(0, limit).toArray();
+  if (rows.length !== limit) {
+    throw new InvalidFrontPageError(limit, rows.length);
   }
 
   const ids = new Set<string>();
