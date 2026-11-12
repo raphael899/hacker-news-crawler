@@ -99,7 +99,7 @@ Concurrent requests can finish too quickly to reliably demonstrate `coalesced` w
 - `src/infrastructure/database/postgres-usage-repository.ts` manages the PostgreSQL pool, migrations, and usage writes.
 - `src/infrastructure/cache/in-memory-front-page-cache.ts` handles TTL reuse and in-flight request sharing.
 - `src/infrastructure/hacker-news/hacker-news-news-source.ts` downloads and parses the Hacker News page.
-- `src/infrastructure/config/app-config.ts` validates the environment.
+- `src/infrastructure/config/app-config.ts` declares the environment schema; `env-schema.ts` provides the reusable `integer` and `url` rules and the `ConfigError` that lists every invalid variable.
 - `src/main.ts` wires the adapters and closes them on `SIGINT` and `SIGTERM`.
 - `Dockerfile`, `docker-compose.yaml`, and `docker/postgres/init/` define the local containers.
 

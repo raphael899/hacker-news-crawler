@@ -53,6 +53,18 @@ describe('loadConfig', () => {
     })).toEqual({ ...expected, cacheTtlMs: 60_000, port: 3000 });
   });
 
+  it('lists every invalid variable in one ConfigError', () => {
+    expect(() => loadConfig({ PORT: '0' })).toThrow(expect.objectContaining({
+      name: 'ConfigError',
+      problems: [
+        'PORT must be a whole number between 1 and 65535',
+        'DATABASE_URL is required',
+        'HN_URL is required',
+        'FETCH_TIMEOUT_MS is required',
+      ],
+    }));
+  });
+
   it.each([
     ['HN_URL', undefined],
     ['HN_URL', 'file:///tmp/front-page.html'],
