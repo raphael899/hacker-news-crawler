@@ -5,12 +5,14 @@ describe('architecture boundary', () => {
   it('domain, application, and ports do not import infrastructure libraries', () => {
     const sourceFiles = [
       '../src/domain/entry.ts',
+      '../src/domain/cache-status.ts',
       '../src/domain/filter.ts',
       '../src/domain/front-page.ts',
       '../src/domain/title.ts',
       '../src/domain/usage-record.ts',
       '../src/application/get-entries.use-case.ts',
       '../src/application/ports/news-source.port.ts',
+      '../src/application/ports/front-page-cache.port.ts',
       '../src/application/ports/usage-repository.port.ts',
       '../src/application/ports/crawler-error.ts',
     ];

@@ -24,6 +24,12 @@ export function buildApp(useCase: GetEntriesUseCase, logger = false) {
         properties: { filter: { type: 'string', enum: ENTRY_FILTERS } },
       },
     },
-  }, (request) => useCase.execute(request.query.filter ?? 'all'));
+  }, async (request, reply) => {
+    const result = await useCase.execute(request.query.filter ?? 'all');
+    reply
+      .header('X-Front-Page-Fetched-At', result.fetchedAt)
+      .header('X-Cache-Status', result.cacheStatus);
+    return result.entries;
+  });
   return app;
 }

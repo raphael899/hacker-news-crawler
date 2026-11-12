@@ -6,6 +6,7 @@ export interface HackerNewsConfig {
 export interface AppConfig {
   readonly port: number;
   readonly databasePath: string;
+  readonly cacheTtlMs: number;
   readonly hackerNews: HackerNewsConfig;
 }
 
@@ -13,6 +14,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   return {
     port: parsePort(env.PORT),
     databasePath: parseDatabasePath(env.DB_PATH),
+    cacheTtlMs: parseCacheTtlMs(env.CACHE_TTL_MS),
     hackerNews: {
       url: parseHackerNewsUrl(env.HN_URL),
       timeoutMs: parseFetchTimeoutMs(env.FETCH_TIMEOUT_MS),
@@ -34,6 +36,17 @@ function parsePort(rawValue: string | undefined): number {
     throw new Error('PORT must be an integer between 1 and 65535');
   }
   return port;
+}
+
+function parseCacheTtlMs(rawValue: string | undefined): number {
+  const value = rawValue?.trim() ?? '';
+  if (value === '') return 60_000;
+
+  const ttlMs = Number(value);
+  if (!/^[0-9]+$/u.test(value) || !Number.isSafeInteger(ttlMs) || ttlMs <= 0) {
+    throw new Error('CACHE_TTL_MS must be a positive safe integer in milliseconds');
+  }
+  return ttlMs;
 }
 
 function parseHackerNewsUrl(value: string | undefined): string {

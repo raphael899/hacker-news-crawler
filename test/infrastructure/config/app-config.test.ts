@@ -2,10 +2,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../../../src/infrastructure/config/app-config.ts';
 
 describe('loadConfig', () => {
-  const validEnv = { PORT: '4123', DB_PATH: 'tmp/usage.sqlite', HN_URL: 'https://origin.test', FETCH_TIMEOUT_MS: ' 5000 ' };
+  const validEnv = {
+    PORT: '4123',
+    DB_PATH: 'tmp/usage.sqlite',
+    CACHE_TTL_MS: ' 45000 ',
+    HN_URL: 'https://origin.test',
+    FETCH_TIMEOUT_MS: ' 5000 ',
+  };
   const expected = {
     port: 4123,
     databasePath: 'tmp/usage.sqlite',
+    cacheTtlMs: 45000,
     hackerNews: { url: 'https://origin.test/', timeoutMs: 5000 },
   };
 
@@ -18,6 +25,7 @@ describe('loadConfig', () => {
   it('uses the process environment by default', () => {
     vi.stubEnv('PORT', validEnv.PORT);
     vi.stubEnv('DB_PATH', validEnv.DB_PATH);
+    vi.stubEnv('CACHE_TTL_MS', validEnv.CACHE_TTL_MS);
     vi.stubEnv('HN_URL', validEnv.HN_URL);
     vi.stubEnv('FETCH_TIMEOUT_MS', validEnv.FETCH_TIMEOUT_MS);
     expect(loadConfig()).toEqual(expected);
@@ -26,13 +34,26 @@ describe('loadConfig', () => {
   it('defaults the port to 3000 when PORT is blank or absent', () => {
     expect(loadConfig({ ...validEnv, PORT: '' })).toEqual({ ...expected, port: 3000 });
     expect(loadConfig({ HN_URL: validEnv.HN_URL, FETCH_TIMEOUT_MS: validEnv.FETCH_TIMEOUT_MS }))
-      .toEqual({ ...expected, databasePath: './data/hn-crawler.sqlite', port: 3000 });
+      .toEqual({ ...expected, databasePath: './data/hn-crawler.sqlite', cacheTtlMs: 60_000, port: 3000 });
   });
 
   it('defaults the database path when DB_PATH is blank or absent', () => {
     expect(loadConfig({ ...validEnv, DB_PATH: '' })).toEqual({ ...expected, databasePath: './data/hn-crawler.sqlite' });
     expect(loadConfig({ HN_URL: validEnv.HN_URL, FETCH_TIMEOUT_MS: validEnv.FETCH_TIMEOUT_MS }))
-      .toEqual({ ...expected, databasePath: './data/hn-crawler.sqlite', port: 3000 });
+      .toEqual({ ...expected, databasePath: './data/hn-crawler.sqlite', cacheTtlMs: 60_000, port: 3000 });
+  });
+
+  it('defaults cache TTL to 60 seconds when CACHE_TTL_MS is blank or absent', () => {
+    expect(loadConfig({ ...validEnv, CACHE_TTL_MS: '' })).toEqual({ ...expected, cacheTtlMs: 60_000 });
+    expect(loadConfig({
+      HN_URL: validEnv.HN_URL,
+      FETCH_TIMEOUT_MS: validEnv.FETCH_TIMEOUT_MS,
+    })).toEqual({
+      ...expected,
+      databasePath: './data/hn-crawler.sqlite',
+      cacheTtlMs: 60_000,
+      port: 3000,
+    });
   });
 
   it.each([
@@ -41,6 +62,9 @@ describe('loadConfig', () => {
     ['PORT', '0'],
     ['PORT', '65536'],
     ['PORT', '3.5'],
+    ['CACHE_TTL_MS', '0'],
+    ['CACHE_TTL_MS', '-1'],
+    ['CACHE_TTL_MS', '1.5'],
     ['FETCH_TIMEOUT_MS', undefined],
     ['FETCH_TIMEOUT_MS', '0'],
     ['FETCH_TIMEOUT_MS', '1e3'],

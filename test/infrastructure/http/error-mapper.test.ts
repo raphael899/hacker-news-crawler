@@ -3,6 +3,7 @@ import { buildApp } from '../../../src/infrastructure/http/app.ts';
 import { GetEntriesUseCase } from '../../../src/application/get-entries.use-case.ts';
 import { CrawlerError } from '../../../src/application/ports/crawler-error.ts';
 import { InMemoryUsageRepository } from '../../fixtures/in-memory-usage-repository.ts';
+import { PassThroughFrontPageCache } from '../../fixtures/pass-through-front-page-cache.ts';
 
 describe('HTTP error handling', () => {
   it.each([
@@ -15,7 +16,7 @@ describe('HTTP error handling', () => {
       async fetchTopEntries() {
         throw failure;
       },
-    }, new InMemoryUsageRepository());
+    }, new PassThroughFrontPageCache(), new InMemoryUsageRepository());
     const app = buildApp(useCase);
 
     try {

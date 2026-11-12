@@ -7,8 +7,10 @@ import { SQLiteUsageRepository } from '../../../src/infrastructure/database/sqli
 
 interface StoredUsageRecord {
   readonly requested_at: string;
+  readonly snapshot_at: string | null;
   readonly filter: string;
   readonly result_count: number;
+  readonly cache_status: string;
 }
 
 describe('SQLiteUsageRepository', () => {
@@ -17,8 +19,10 @@ describe('SQLiteUsageRepository', () => {
     try {
       expect(() => repository.record({
         requestedAt: '2026-11-12T15:00:00.000Z',
+        snapshotAt: '2026-11-12T15:00:00.000Z',
         filter: 'all',
         resultCount: 30,
+        cacheStatus: 'miss',
       })).not.toThrow();
     } finally {
       repository.close();
@@ -71,7 +75,7 @@ describe('SQLiteUsageRepository', () => {
     const directory = await mkdtemp(join(tmpdir(), 'hn-crawler-'));
     const databasePath = join(directory, 'usage.sqlite');
     const database = new DatabaseSync(databasePath);
-    database.exec('PRAGMA user_version = 1');
+    database.exec('PRAGMA user_version = 2');
     database.close();
     const closeSpy = vi.spyOn(DatabaseSync.prototype, 'close');
 
@@ -111,8 +115,10 @@ describe('SQLiteUsageRepository', () => {
     const databasePath = join(directory, 'nested', 'usage.sqlite');
     const usageRecord = {
       requestedAt: '2026-11-12T15:00:00.000Z',
+      snapshotAt: '2026-11-12T14:59:59.000Z',
       filter: 'long' as const,
       resultCount: 7,
+      cacheStatus: 'miss' as const,
     };
 
     try {
@@ -126,16 +132,18 @@ describe('SQLiteUsageRepository', () => {
       const database = new DatabaseSync(databasePath);
       try {
         const row = database.prepare(`
-          SELECT requested_at, filter, result_count
+          SELECT requested_at, snapshot_at, filter, result_count, cache_status
           FROM usage_records
         `).get() as StoredUsageRecord | undefined;
         const schemaVersion = database.prepare('PRAGMA user_version').get() as { user_version: number };
         expect(row).toEqual({
           requested_at: usageRecord.requestedAt,
+          snapshot_at: usageRecord.snapshotAt,
           filter: usageRecord.filter,
           result_count: usageRecord.resultCount,
+          cache_status: usageRecord.cacheStatus,
         });
-        expect(schemaVersion.user_version).toBe(1);
+        expect(schemaVersion.user_version).toBe(2);
       } finally {
         database.close();
       }
@@ -167,8 +175,10 @@ describe('SQLiteUsageRepository', () => {
       try {
         repository.record({
           requestedAt: '2026-11-12T15:00:00.000Z',
+          snapshotAt: '2026-11-12T14:59:59.000Z',
           filter: 'short',
           resultCount: 18,
+          cacheStatus: 'coalesced',
         });
       } finally {
         repository.close();
@@ -177,16 +187,28 @@ describe('SQLiteUsageRepository', () => {
       const database = new DatabaseSync(databasePath);
       try {
         const rows = database.prepare(`
-          SELECT requested_at, filter, result_count
+          SELECT requested_at, snapshot_at, filter, result_count, cache_status
           FROM usage_records
           ORDER BY id
         `).all();
         const schemaVersion = database.prepare('PRAGMA user_version').get() as { user_version: number };
         expect(rows).toEqual([
-          { requested_at: '2026-11-12T14:00:00.000Z', filter: 'all', result_count: 30 },
-          { requested_at: '2026-11-12T15:00:00.000Z', filter: 'short', result_count: 18 },
+          {
+            requested_at: '2026-11-12T14:00:00.000Z',
+            snapshot_at: null,
+            filter: 'all',
+            result_count: 30,
+            cache_status: 'miss',
+          },
+          {
+            requested_at: '2026-11-12T15:00:00.000Z',
+            snapshot_at: '2026-11-12T14:59:59.000Z',
+            filter: 'short',
+            result_count: 18,
+            cache_status: 'coalesced',
+          },
         ]);
-        expect(schemaVersion.user_version).toBe(1);
+        expect(schemaVersion.user_version).toBe(2);
       } finally {
         database.close();
       }
