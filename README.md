@@ -14,7 +14,7 @@ pnpm install --frozen-lockfile
 cp .env.example .env
 ```
 
-Set `HN_URL` to the front-page URL and `FETCH_TIMEOUT_MS` to the download deadline as a positive decimal integer in milliseconds. The example file uses Hacker News and a 5-second deadline.
+Fill in the values in your local `.env`. Set `HN_URL` to `https://news.ycombinator.com/` and `FETCH_TIMEOUT_MS` to a positive decimal integer in milliseconds. For a five-second deadline, use `5000`. `PORT`, `CACHE_TTL_MS`, and `DB_PATH` are reserved for the upcoming server, cache, and storage integrations.
 
 ## Start the service
 
