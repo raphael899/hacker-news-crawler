@@ -27,10 +27,10 @@ Inspect the database configured by `DB_PATH`. For `DB_PATH=./data/usage.sqlite`:
 ```sh
 sqlite3 ./data/usage.sqlite '.tables'
 sqlite3 ./data/usage.sqlite \
-  'SELECT requested_at, snapshot_at, filter, result_count, cache_status FROM usage_records ORDER BY id DESC LIMIT 10;'
+  'SELECT requested_at, snapshot_at, filter, result_count, cache_status, outcome FROM usage_records ORDER BY id DESC LIMIT 10;'
 ```
 
-The table appears after the service initializes the database. A successful endpoint request adds one row with its request time, snapshot time, filter, result count, and cache status. If SQLite says `no such table`, first check that the server is running and that the command points to the same `DB_PATH` as `.env`.
+The table appears after the service initializes the database. A successful endpoint request adds one row with its request time, snapshot time, filter, result count, cache status, and `success` outcome. Recognized crawler failures also add a row; failed downloads have a null snapshot time, zero results, and an outcome such as `timeout`. If SQLite says `no such table`, first check that the server is running and that the command points to the same `DB_PATH` as `.env`.
 
 ## Check cache reuse and expiration manually
 
@@ -42,6 +42,8 @@ curl -i 'http://localhost:3000/entries?filter=long'
 ```
 
 The first successful request after restart should return `X-Cache-Status: miss`. The next request within the TTL should return `hit`. Both should have the same `X-Front-Page-Fetched-At`, since filtering runs on the same cached front-page snapshot. The request rows in SQLite should show the corresponding statuses.
+
+To verify recovery after a timeout through the HTTP boundary, use the automated case in `test/infrastructure/http/app.test.ts`. It makes the first source attempt fail with a timeout and the next attempt succeed, then checks for a `504`, a later `200`, and both usage records. This is deterministic and does not rely on making Hacker News time out in a live environment.
 
 To observe expiration, set a short positive `CACHE_TTL_MS` in `.env` (for example, `5000`), restart the server, make a successful request, wait longer than five seconds, then make another successful request. The later response should return `miss` with a newer snapshot timestamp. Restore the desired TTL afterwards. Restarting the server also clears the in-memory cache, so do not restart between the two requests in this check.
 

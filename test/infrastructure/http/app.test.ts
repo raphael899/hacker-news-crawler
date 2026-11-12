@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GetEntriesUseCase } from '../../../src/application/get-entries.use-case.ts';
+import { CrawlerError } from '../../../src/application/ports/crawler-error.ts';
 import type { NewsSourcePort } from '../../../src/application/ports/news-source.port.ts';
 import { buildApp } from '../../../src/infrastructure/http/app.ts';
 import { InMemoryFrontPageCache } from '../../../src/infrastructure/cache/in-memory-front-page-cache.ts';
@@ -85,6 +86,48 @@ describe('HTTP app', () => {
       expect(response.json()).toEqual({
         error: { code: 'internal_error', message: 'An unexpected error occurred.' },
       });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('records a timeout and lets the next request retry successfully', async () => {
+    let attempts = 0;
+    const source: NewsSourcePort = {
+      async fetchTopEntries() {
+        attempts += 1;
+        if (attempts === 1) throw new CrawlerError('timeout', 'private timeout details');
+        return makeEntries(30);
+      },
+    };
+    const usageRepository = new InMemoryUsageRepository();
+    const app = buildApp(new GetEntriesUseCase(
+      source,
+      new InMemoryFrontPageCache(60_000),
+      usageRepository,
+    ));
+
+    try {
+      const timeoutResponse = await app.inject('/entries?filter=long');
+      expect(timeoutResponse.statusCode).toBe(504);
+      expect(timeoutResponse.json()).toEqual({
+        error: { code: 'timeout', message: 'Hacker News did not respond in time.' },
+      });
+
+      const recoveredResponse = await app.inject('/entries?filter=long');
+      expect(recoveredResponse.statusCode).toBe(200);
+      expect(recoveredResponse.headers['x-cache-status']).toBe('miss');
+      expect(recoveredResponse.json()).toHaveLength(0);
+      expect(attempts).toBe(2);
+      expect(usageRepository.records.map(({ outcome, filter, resultCount, snapshotAt }) => ({
+        outcome,
+        filter,
+        resultCount,
+        snapshotAt,
+      }))).toEqual([
+        { outcome: 'timeout', filter: 'long', resultCount: 0, snapshotAt: null },
+        { outcome: 'success', filter: 'long', resultCount: 0, snapshotAt: expect.any(String) },
+      ]);
     } finally {
       await app.close();
     }
