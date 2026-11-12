@@ -67,4 +67,8 @@ pnpm build
 
 The build writes compiled JavaScript to `dist/`.
 
-[Design decisions](docs/architecture.md)
+## Further reading
+
+- [Architecture and design decisions](docs/architecture.md)
+- [Testing and local verification](docs/testing.md)
+- [Repository guidance for agents](AGENTS.md)
