@@ -2,7 +2,7 @@
 
 ## Method
 
-Run the benchmark manually from the repository root with Node 24 and a configured `.env`:
+Run the benchmark manually from the repository root with Node 24 and a configured `.env.local`:
 
 ```sh
 pnpm benchmark 500 500 3

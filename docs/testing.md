@@ -1,6 +1,6 @@
 # Testing and local verification
 
-Run commands from the repository root. The local setup uses the Docker Compose stack in `compose.yaml`: PostgreSQL 18 with an `hn_crawler` database for the API and an `hn_crawler_test` database for the integration tests. Start the whole stack with `docker compose up --build`, or only the database with `docker compose up -d postgres` when running `pnpm dev` on the host. The `.env.example` values already point at that database. Never commit `.env` or paste a deployed connection URL into source code.
+Run commands from the repository root. The local setup uses the Docker Compose stack in `compose.yaml`: PostgreSQL 18 with an `hn_crawler` database for the API and an `hn_crawler_test` database for the integration tests. Start the whole stack with `docker compose up --build`, or only the database with `docker compose up -d postgres` when running `pnpm start:dev` on the host. Copy `.env.local.example` to `.env.local` and run `pnpm start:dev`; its values already point at that database. `.env` is reserved for the production database used by `pnpm start`. Never commit `.env` or `.env.local` or paste a deployed connection URL into source code.
 
 ## Automated checks
 
@@ -55,13 +55,13 @@ Each successful request should add a row containing its request time, snapshot t
 
 ## Measure parser, downloads, and cache hits
 
-Run `pnpm benchmark` from the repository root with `.env` configured. The benchmark parses the checked-in HTML fixture, makes a few sequential live downloads, and measures repeated cache hits. Optional positional arguments set parse iterations, cache-hit iterations, and live download samples, in that order; for example, `pnpm benchmark 1000 500 3`. Live samples are spaced by one second. See [benchmark methodology and live results](benchmark-results.md). Do not add live benchmark execution to CI.
+Run `pnpm benchmark` from the repository root with `.env.local` configured. The benchmark parses the checked-in HTML fixture, makes a few sequential live downloads, and measures repeated cache hits. Optional positional arguments set parse iterations, cache-hit iterations, and live download samples, in that order; for example, `pnpm benchmark 1000 500 3`. Live samples are spaced by one second. See [benchmark methodology and live results](benchmark-results.md). Do not add live benchmark execution to CI.
 
 The timing comparison isolates parser work and application request paths. It uses a no-op usage repository, so download/cache timings exclude PostgreSQL writes and Fastify overhead. Network timings vary with Hacker News and the local connection; use the recorded environment and sample counts when comparing runs.
 
 ## Check cache reuse and expiration manually
 
-The cache belongs to one server process. Restart the API (`docker compose restart app`, or `pnpm dev` on the host) to start with an empty cache; this does not erase PostgreSQL history. Immediately send two requests:
+The cache belongs to one server process. Restart the API (`docker compose restart app`, or `pnpm start:dev` on the host) to start with an empty cache; this does not erase PostgreSQL history. Immediately send two requests:
 
 ```sh
 curl -i 'http://localhost:3000/entries'
@@ -72,7 +72,7 @@ The first successful request after restart should return `X-Cache-Status: miss`.
 
 To verify recovery after a timeout through the HTTP boundary, use the automated case in `test/infrastructure/http/app.test.ts`. It makes the first source attempt fail with a timeout and the next attempt succeed, then checks for a `504`, a later `200`, and both usage records. This is deterministic and does not rely on making Hacker News time out in a live environment.
 
-To observe expiration, set a short positive `CACHE_TTL_MS` in `.env` (for example, `5000`), restart the server, make a successful request, wait longer than five seconds, then make another successful request. The later response should return `miss` with a newer snapshot timestamp. Restore the desired TTL afterwards. Restarting the server also clears the in-memory cache, so do not restart between the two requests in this check.
+To observe expiration, set a short positive `CACHE_TTL_MS` in `.env.local` (for example, `5000`), restart the server, make a successful request, wait longer than five seconds, then make another successful request. The later response should return `miss` with a newer snapshot timestamp. Restore the desired TTL afterwards. Restarting the server also clears the in-memory cache, so do not restart between the two requests in this check.
 
 Concurrent requests can finish too quickly to reliably demonstrate `coalesced` with manual `curl` commands. Use the automated HTTP concurrency test; it verifies one download, a shared snapshot timestamp, and `miss` plus `coalesced` outcomes.
 

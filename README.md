@@ -46,7 +46,14 @@ The Compose credentials (`crawler`/`crawler`) are for this disposable local data
 
 ## Develop on the host
 
-Requirements: Node.js 24.15.0 and [pnpm](https://pnpm.io/installation) 10.24.0. Start only the database in Docker, then install dependencies and copy the environment template:
+Requirements: Node.js 24.15.0 and [pnpm](https://pnpm.io/installation) 10.24.0. The project uses two environment files, both ignored by Git:
+
+| File | Template | Database | Used by |
+| --- | --- | --- | --- |
+| `.env.local` | `.env.local.example` | Local Docker Compose PostgreSQL | `pnpm start:dev`, `pnpm benchmark` |
+| `.env` | `.env.example` | Production PostgreSQL | `pnpm start` |
+
+Start only the database in Docker, then install dependencies and create `.env.local`:
 
 ```sh
 docker compose up -d postgres
@@ -57,23 +64,31 @@ pnpm install --frozen-lockfile
 ```
 
 ```sh
-cp .env.example .env
+cp .env.local.example .env.local
 ```
 
-The template already points `DATABASE_URL` at the Compose database (`postgresql://crawler:crawler@localhost:5432/hn_crawler`), so it works without edits. `HN_URL`, `FETCH_TIMEOUT_MS`, and `DATABASE_URL` are required. `PORT` defaults to `3000`, and `CACHE_TTL_MS` defaults to `60000` (one minute). Never commit `.env`.
+The local template already points `DATABASE_URL` at the Compose database (`postgresql://crawler:crawler@localhost:5432/hn_crawler`), so it works without edits. `HN_URL`, `FETCH_TIMEOUT_MS`, and `DATABASE_URL` are required. `PORT` defaults to `3000`, and `CACHE_TTL_MS` defaults to `60000` (one minute).
 
-Start the TypeScript server with Node's watch mode:
+Start the TypeScript server with Node's watch mode, using `.env.local`:
 
 ```sh
-pnpm dev
+pnpm start:dev
 ```
 
-For a production-style run, compile and start the generated JavaScript:
+`npm run start:dev` works as well; the script only calls `node`.
+
+For a production-style run, create `.env` from `.env.example`, set `DATABASE_URL` to the production database, then compile and start the generated JavaScript:
+
+```sh
+cp .env.example .env
+```
 
 ```sh
 pnpm build
 pnpm start
 ```
+
+`pnpm start` writes usage records to the database in `.env`, so run it locally only when you intend to use production data. Never commit `.env` or `.env.local`.
 
 ## Run tests on the host
 
@@ -96,7 +111,7 @@ The service only needs `DATABASE_URL` and the Hacker News settings from the envi
 
 ## Measure parser, downloads, and cache hits
 
-With `.env` configured, run `pnpm benchmark`. See [benchmark methodology and live results](docs/benchmark-results.md). The benchmark makes a small number of live requests to Hacker News, so run it manually and outside CI.
+With `.env.local` configured, run `pnpm benchmark`. See [benchmark methodology and live results](docs/benchmark-results.md). The benchmark makes a small number of live requests to Hacker News, so run it manually and outside CI.
 
 ## Lint, check types, and build
 

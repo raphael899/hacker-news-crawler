@@ -9,11 +9,11 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "dev": "node --watch --env-file=.env src/main.ts",
+    "start:dev": "node --watch --env-file=.env.local src/main.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "start": "node --env-file=.env dist/main.js",
-    "benchmark": "node --env-file=.env scripts/benchmark.ts",
+    "benchmark": "node --env-file=.env.local scripts/benchmark.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   },

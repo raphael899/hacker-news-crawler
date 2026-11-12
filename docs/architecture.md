@@ -86,11 +86,11 @@ Cheerio belongs inside the Hacker News adapter. The application receives typed e
 
 ## Why load configuration at startup
 
-`loadConfig()` reads and validates the environment in one place. The server entry point calls it once and passes the resulting settings to the downloader and listener. Node's `--env-file=.env` option loads local values before the application starts, so application code does not need to read `process.env` from multiple modules. The port defaults to `3000`; the Hacker News URL and request timeout must be configured. The downloader accepts settings directly, which lets its tests run without changing the process environment.
+`loadConfig()` reads and validates the environment in one place. The server entry point calls it once and passes the resulting settings to the downloader and listener. Node's `--env-file` option loads the values before the application starts: `pnpm start:dev` reads `.env.local` (the local Docker database) and `pnpm start` reads `.env` (production), so a development run cannot write to the production database by accident. Application code therefore does not need to read `process.env` from multiple modules, so application code does not need to read `process.env` from multiple modules. The port defaults to `3000`; the Hacker News URL and request timeout must be configured. The downloader accepts settings directly, which lets its tests run without changing the process environment.
 
 ## Why use Node's TypeScript support in development
 
-`pnpm dev` runs `src/main.ts` with Node's built-in TypeScript type stripping and watch mode. This avoids a separate development transpiler in a small Node 24 project. `pnpm start` runs the JavaScript emitted by the TypeScript build, keeping development execution separate from the production-style path.
+`pnpm start:dev` runs `src/main.ts` with Node's built-in TypeScript type stripping and watch mode. This avoids a separate development transpiler in a small Node 24 project. `pnpm start` runs the JavaScript emitted by the TypeScript build, keeping development execution separate from the production-style path.
 
 ## Why one download deadline
 
