@@ -7,6 +7,7 @@ describe('architecture boundary', () => {
       '../src/domain/entry.ts',
       '../src/domain/filter.ts',
       '../src/domain/front-page.ts',
+      '../src/domain/title.ts',
       '../src/application/get-entries.use-case.ts',
       '../src/application/ports/news-source.port.ts',
       '../src/application/ports/crawler-error.ts',
