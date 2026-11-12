@@ -44,6 +44,8 @@ The usage history should survive a restart and be easy to inspect. SQLite provid
 
 Each successful, valid request records an ISO 8601 UTC timestamp, the normalized filter, and the result count. The use case writes only after the source has returned and the 30-entry domain rule and filter have succeeded. A storage error propagates to the HTTP boundary and returns `500` rather than returning an unrecorded success. The Fastify close hook closes the database connection.
 
+The repository tracks schema versions with SQLite's `PRAGMA user_version` and applies migrations sequentially inside transactions. The first migration also adopts the unversioned table created by the earlier T08 implementation, preserving its rows. Future schema changes should add another migration rather than relying on `CREATE TABLE IF NOT EXISTS` to modify an existing table. If opening, migrating, or preparing the insert statement fails, the repository closes its connection before rethrowing the initialization error.
+
 ## Why Cheerio for Hacker News
 
 The titles, scores, and comment counts are already present in the HTML returned by the Hacker News front page. Node's `fetch` downloads that response, and the parser uses Cheerio selectors to pair each story with its metadata row. The parser can also run against saved HTML in tests, which makes the results repeatable without a network request.
