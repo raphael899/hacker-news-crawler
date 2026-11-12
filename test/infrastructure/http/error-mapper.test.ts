@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildApp } from '../src/infrastructure/http/app.ts';
-import { GetEntriesUseCase } from '../src/application/get-entries.use-case.ts';
-import { CrawlerError } from '../src/application/ports/crawler-error.ts';
+import { buildApp } from '../../../src/infrastructure/http/app.ts';
+import { GetEntriesUseCase } from '../../../src/application/get-entries.use-case.ts';
+import { CrawlerError } from '../../../src/application/ports/crawler-error.ts';
 
 describe('HTTP error handling', () => {
   it.each([

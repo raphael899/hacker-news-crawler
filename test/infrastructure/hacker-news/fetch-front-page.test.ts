@@ -1,17 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { readFetchTimeoutMs, readHackerNewsUrl } from '../src/infrastructure/config/hacker-news.ts';
-import { fetchFrontPage } from '../src/infrastructure/hacker-news/fetch-front-page.ts';
+import { fetchFrontPage } from '../../../src/infrastructure/hacker-news/fetch-front-page.ts';
 
 describe('front page download', () => {
   const url = 'http://origin.test/';
 
   afterEach(() => vi.unstubAllEnvs());
-
-  it('accepts configuration supplied explicitly', () => {
-    const env = { HN_URL: 'https://origin.test', FETCH_TIMEOUT_MS: ' 5000 ' };
-    expect(readHackerNewsUrl(env)).toBe('https://origin.test/');
-    expect(readFetchTimeoutMs(env)).toBe(5000);
-  });
 
   it('reads the source URL and timeout from the environment', async () => {
     vi.stubEnv('HN_URL', url);

@@ -27,7 +27,7 @@ npm test
 npm run test:coverage
 ```
 
-Use `npm test` to run the suite once and `npm run test:coverage` to check it against the configured coverage thresholds.
+Use `npm test` to run the suite once and `npm run test:coverage` to check it against the configured coverage thresholds. Test directories mirror `src/`.
 
 ## Lint, check types, and build
 
