@@ -50,7 +50,7 @@ Requirements: Node.js 24.15.0 and [pnpm](https://pnpm.io/installation) 10.24.0. 
 
 | File | Template | Database | Used by |
 | --- | --- | --- | --- |
-| `.env.local` | `.env.local.example` | Local Docker Compose PostgreSQL | `pnpm start:dev`, `pnpm benchmark` |
+| `.env.local` | `.env.local.example` | Local Docker Compose PostgreSQL | `pnpm dev`, `pnpm benchmark` |
 | `.env` | `.env.example` | Production PostgreSQL | `pnpm start` |
 
 Start only the database in Docker, then install dependencies and create `.env.local`:
@@ -72,10 +72,10 @@ The local template already points `DATABASE_URL` at the Compose database (`postg
 Start the TypeScript server with Node's watch mode, using `.env.local`:
 
 ```sh
-pnpm start:dev
+pnpm dev
 ```
 
-`npm run start:dev` works as well; the script only calls `node`.
+`npm run dev` works as well; the script only calls `node`.
 
 For a production-style run, create `.env` from `.env.example`, set `DATABASE_URL` to the production database, then compile and start the generated JavaScript:
 

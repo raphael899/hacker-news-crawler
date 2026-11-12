@@ -1,6 +1,6 @@
 # Testing and local verification
 
-Run commands from the repository root. The local setup uses the Docker Compose stack in `docker-compose.yaml`: PostgreSQL 18 with an `hn_crawler` database for the API and an `hn_crawler_test` database for the integration tests. Start the whole stack with `docker compose up --build`, or only the database with `docker compose up -d postgres` when running `pnpm start:dev` on the host. Copy `.env.local.example` to `.env.local` and run `pnpm start:dev`; its values already point at that database. `.env` is reserved for the production database used by `pnpm start`. Never commit `.env` or `.env.local` or paste a deployed connection URL into source code.
+Run commands from the repository root. The local setup uses the Docker Compose stack in `docker-compose.yaml`: PostgreSQL 18 with an `hn_crawler` database for the API and an `hn_crawler_test` database for the integration tests. Start the whole stack with `docker compose up --build`, or only the database with `docker compose up -d postgres` when running `pnpm dev` on the host. Copy `.env.local.example` to `.env.local` and run `pnpm dev`; its values already point at that database. `.env` is reserved for the production database used by `pnpm start`. Never commit `.env` or `.env.local` or paste a deployed connection URL into source code.
 
 ## Automated checks
 
@@ -61,7 +61,7 @@ The timing comparison isolates parser work and application request paths. It use
 
 ## Check cache reuse and expiration manually
 
-The cache belongs to one server process. Restart the API (`docker compose restart app`, or `pnpm start:dev` on the host) to start with an empty cache; this does not erase PostgreSQL history. Immediately send two requests:
+The cache belongs to one server process. Restart the API (`docker compose restart app`, or `pnpm dev` on the host) to start with an empty cache; this does not erase PostgreSQL history. Immediately send two requests:
 
 ```sh
 curl -i 'http://localhost:3000/entries'
