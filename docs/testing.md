@@ -1,6 +1,6 @@
 # Testing and local verification
 
-Run commands from the repository root. Copy `.env.example` to `.env`, then set `DATABASE_URL` to a PostgreSQL connection URL. For local development, use the provider's external URL. For a Render web service in the same region as the database, use its internal URL. Never commit `.env` or paste a connection URL into source code.
+Run commands from the repository root. The local setup uses the Docker Compose stack in `compose.yaml`: PostgreSQL 18 with an `hn_crawler` database for the API and an `hn_crawler_test` database for the integration tests. Start the whole stack with `docker compose up --build`, or only the database with `docker compose up -d postgres` when running `pnpm dev` on the host. The `.env.example` values already point at that database. Never commit `.env` or paste a deployed connection URL into source code.
 
 ## Automated checks
 
@@ -12,9 +12,25 @@ pnpm lint
 pnpm build
 ```
 
-The PostgreSQL repository tests run when `TEST_DATABASE_URL` is set. They create a unique temporary schema per test and drop only that schema during cleanup; use a disposable database and never point this variable at a production database. When the variable is absent, Vitest skips these integration tests. GitHub Actions starts PostgreSQL 18 for the CI run and sets `TEST_DATABASE_URL`, so those tests always run there.
+The PostgreSQL repository tests run when `TEST_DATABASE_URL` is set. They create a unique temporary schema per test and drop only that schema during cleanup; use a disposable database and never point this variable at a production database. When the variable is absent, Vitest skips these integration tests, and `pnpm test:coverage` falls below its thresholds. Locally, run `docker compose run --rm --build test`, which sets the variable for the containerized suite, or run `TEST_DATABASE_URL=postgresql://crawler:crawler@localhost:5432/hn_crawler_test pnpm test:coverage` on the host while the Compose database is up. The `hn_crawler_test` database is created by `docker/postgres/init/` the first time the volume is initialized; if you created the volume before that script existed, recreate it with `docker compose down -v`, which deletes local usage history. GitHub Actions starts PostgreSQL 18 for the CI run and sets `TEST_DATABASE_URL`, so those tests always run there.
 
 The repository integration tests cover schema creation, idempotent startup, persisted success and failure records, newer-schema rejection, and connection-pool cleanup. The remaining tests use deterministic fixtures and clocks and do not depend on a live Hacker News response or wall-clock delays.
+
+## Verify usage records locally
+
+With `docker compose up --build` running, make a successful request:
+
+```sh
+curl -i 'http://localhost:3000/entries'
+```
+
+Then query the Compose database:
+
+```sh
+docker compose exec postgres psql -U crawler -d hn_crawler -c 'SELECT requested_at, snapshot_at, filter, outcome, result_count, cache_status FROM usage_records ORDER BY id DESC LIMIT 10;'
+```
+
+The API also survives a database restart: `docker compose restart postgres` drops pooled connections, the repository logs `PostgreSQL idle connection error`, and the next request succeeds once PostgreSQL is healthy again.
 
 ## Verify the managed database
 
@@ -45,7 +61,7 @@ The timing comparison isolates parser work and application request paths. It use
 
 ## Check cache reuse and expiration manually
 
-The cache belongs to one server process. Restart `pnpm dev` to start with an empty cache; this does not erase PostgreSQL history. Immediately send two requests:
+The cache belongs to one server process. Restart the API (`docker compose restart app`, or `pnpm dev` on the host) to start with an empty cache; this does not erase PostgreSQL history. Immediately send two requests:
 
 ```sh
 curl -i 'http://localhost:3000/entries'
