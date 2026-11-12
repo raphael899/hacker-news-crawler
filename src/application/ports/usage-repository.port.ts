@@ -12,6 +12,7 @@ export interface UsageRecord {
   readonly resultCount: number;
   readonly cacheStatus: CacheStatus;
   readonly outcome: UsageOutcome;
+  readonly durationMs: number;
 }
 
 export interface UsageRepositoryPort {

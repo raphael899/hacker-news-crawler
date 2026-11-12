@@ -25,6 +25,7 @@ describe('GetEntriesUseCase', () => {
       new PassThroughFrontPageCache(),
       usageRepository,
       () => new Date(requestedAt),
+      monotonicClock(100, 142),
     ).execute('all');
     expect(result.entries).toEqual(entries);
     expect(result.fetchedAt).toBe('2026-11-12T15:00:00.000Z');
@@ -37,6 +38,7 @@ describe('GetEntriesUseCase', () => {
       resultCount: 30,
       cacheStatus: 'miss',
       outcome: 'success',
+      durationMs: 42,
     }]);
   });
 
@@ -85,6 +87,7 @@ describe('GetEntriesUseCase', () => {
       resultCount: 0,
       cacheStatus: 'miss',
       outcome: 'invalid_html',
+      durationMs: expect.any(Number),
     }]);
   });
 
@@ -171,3 +174,8 @@ describe('GetEntriesUseCase', () => {
     await expect(useCase.execute('all')).rejects.toThrow('disk is full');
   });
 });
+
+/** Returns each reading in turn, so a test controls the measured duration. */
+function monotonicClock(...readings: number[]): () => number {
+  return () => readings.shift() ?? Number.NaN;
+}

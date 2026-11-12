@@ -9,35 +9,48 @@ import {
 } from './ports/front-page-cache.port.ts';
 import type { GetEntriesPort, GetEntriesResult } from './ports/get-entries.port.ts';
 import type { NewsSourcePort } from './ports/news-source.port.ts';
-import type { UsageRepositoryPort } from './ports/usage-repository.port.ts';
+import type { UsageRecord, UsageRepositoryPort } from './ports/usage-repository.port.ts';
+
+interface RequestContext {
+  readonly filter: EntryFilter;
+  readonly requestedAt: string;
+  readonly startedAt: number;
+}
+
+type RequestResult = Pick<UsageRecord, 'snapshotAt' | 'resultCount' | 'cacheStatus' | 'outcome'>;
 
 export class GetEntriesUseCase implements GetEntriesPort {
   private readonly newsSource: NewsSourcePort;
   private readonly frontPageCache: FrontPageCachePort;
   private readonly usageRepository: UsageRepositoryPort;
-  private readonly now: () => Date;
+  private readonly wallClock: () => Date;
+  private readonly monotonicNow: () => number;
 
   constructor(
     newsSource: NewsSourcePort,
     frontPageCache: FrontPageCachePort,
     usageRepository: UsageRepositoryPort,
-    now: () => Date = () => new Date(),
+    wallClock: () => Date = () => new Date(),
+    monotonicNow: () => number = () => performance.now(),
   ) {
     this.newsSource = newsSource;
     this.frontPageCache = frontPageCache;
     this.usageRepository = usageRepository;
-    this.now = now;
+    this.wallClock = wallClock;
+    this.monotonicNow = monotonicNow;
   }
 
   async execute(filter: EntryFilter): Promise<GetEntriesResult> {
-    const requestedAt = this.now().toISOString();
-    const snapshot = await this.loadSnapshot(requestedAt, filter);
+    const request: RequestContext = {
+      filter,
+      requestedAt: this.wallClock().toISOString(),
+      startedAt: this.monotonicNow(),
+    };
+    const snapshot = await this.loadSnapshot(request);
     const entries = filterEntries(snapshot.frontPage.entries, filter);
 
-    await this.usageRepository.record({
-      requestedAt,
+    await this.record(request, {
       snapshotAt: snapshot.fetchedAt,
-      filter,
       resultCount: entries.length,
       cacheStatus: snapshot.cacheStatus,
       outcome: 'success',
@@ -45,20 +58,13 @@ export class GetEntriesUseCase implements GetEntriesPort {
     return { entries, fetchedAt: snapshot.fetchedAt, cacheStatus: snapshot.cacheStatus };
   }
 
-  private async loadSnapshot(requestedAt: string, filter: EntryFilter): Promise<CachedFrontPage> {
+  private async loadSnapshot(request: RequestContext): Promise<CachedFrontPage> {
     try {
       return await this.frontPageCache.getOrLoad(() => this.downloadFrontPage());
     } catch (error) {
       const { cause, cacheStatus } = unwrapLoadError(error);
       if (cause instanceof CrawlerError) {
-        await this.usageRepository.record({
-          requestedAt,
-          snapshotAt: null,
-          filter,
-          resultCount: 0,
-          cacheStatus,
-          outcome: cause.outcome,
-        });
+        await this.record(request, { snapshotAt: null, resultCount: 0, cacheStatus, outcome: cause.outcome });
       }
       throw cause;
     }
@@ -74,6 +80,11 @@ export class GetEntriesUseCase implements GetEntriesPort {
       }
       throw error;
     }
+  }
+
+  private async record({ filter, requestedAt, startedAt }: RequestContext, result: RequestResult): Promise<void> {
+    const durationMs = Math.round(this.monotonicNow() - startedAt);
+    await this.usageRepository.record({ requestedAt, filter, ...result, durationMs });
   }
 }
 
