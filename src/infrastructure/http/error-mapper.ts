@@ -14,6 +14,7 @@ interface HttpErrorResponse {
 const crawlerResponses = {
   upstream_error: { statusCode: 502, message: 'Could not fetch the Hacker News front page.' },
   timeout: { statusCode: 504, message: 'Hacker News did not respond in time.' },
+  invalid_html: { statusCode: 502, message: 'Hacker News returned an invalid front page.' },
 } satisfies Record<CrawlerError['outcome'], { statusCode: number; message: string }>;
 
 export function mapHttpError(error: unknown): HttpErrorResponse {
@@ -23,10 +24,8 @@ export function mapHttpError(error: unknown): HttpErrorResponse {
   }
 
   if (error instanceof InvalidFrontPageError) {
-    return {
-      statusCode: 502,
-      body: { error: { code: 'invalid_html', message: 'Hacker News returned an invalid front page.' } },
-    };
+    const { statusCode, message } = crawlerResponses.invalid_html;
+    return { statusCode, body: { error: { code: 'invalid_html', message } } };
   }
 
   if (error instanceof Error && 'code' in error && error.code === 'FST_ERR_VALIDATION') {

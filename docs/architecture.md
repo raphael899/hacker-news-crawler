@@ -16,7 +16,7 @@ flowchart LR
   SQLite[Planned SQLite adapter] -. implements .-> UsagePort
 ```
 
-Dependencies point inward. The domain defines the entry shape, the allowed filter values, and the front-page size rule. The application requests entries through the news source port and validates the result. Fastify is the inbound adapter. The Hacker News adapter currently downloads HTML. The parser will turn that HTML into entries, and the planned SQLite adapter will store usage records.
+Dependencies point inward. The domain defines the entry shape, the allowed filter values, and the front-page size rule. The application requests entries through the news source port and validates the result. Fastify is the inbound adapter. The Hacker News infrastructure downloads HTML and parses it into entries. The server will connect both operations to the news source port, and the planned SQLite adapter will store usage records.
 
 The source tree groups business concepts under `src/domain/`, use cases and their contracts under `src/application/`, and concrete adapters under `src/infrastructure/`. The ports live in `src/application/ports/` because the use case defines the capabilities it needs. The HTTP adapter, Hacker News downloader, and environment configuration each have a folder in infrastructure. The SQLite folder will be added with its implementation.
 
@@ -34,7 +34,7 @@ The project declares the pnpm version in `package.json` and commits `pnpm-lock.y
 
 ## Why Vitest and CI
 
-Vitest lets us test the use case with a fake source, simulate failed downloads, and exercise the Fastify route without opening a port. The test directories mirror `src/`. Once the parser is in place, saved HTML will make its tests independent of the live site. CI runs lint, type checking, tests with coverage, and the build so reviewers can see whether a change meets the same checks used locally.
+Vitest lets us test the use case with a fake source, simulate failed downloads, and exercise the Fastify route without opening a port. The test directories mirror `src/`. The parser tests use saved HTML and run independently of the live site. CI runs lint, type checking, tests with coverage, and the build so reviewers can see whether a change meets the same checks used locally.
 
 ## Why SQLite for usage records
 
@@ -42,13 +42,15 @@ The usage history should survive a restart and be easy to inspect. SQLite provid
 
 ## Why Cheerio for Hacker News
 
-The titles, scores, and comment counts are already present in the HTML returned by the Hacker News front page. Node's `fetch` downloads that response, and the parser will use Cheerio so the adapter can use CSS selectors to read each story and its metadata. The parser can also run against saved HTML in tests, which makes the results repeatable without a network request.
+The titles, scores, and comment counts are already present in the HTML returned by the Hacker News front page. Node's `fetch` downloads that response, and the parser uses Cheerio selectors to pair each story with its metadata row. The parser can also run against saved HTML in tests, which makes the results repeatable without a network request.
 
 We considered three alternatives:
 
 - **Playwright** runs a browser and can read content that appears after JavaScript executes or after user interaction. We would reconsider it if Hacker News moved the required fields to client-side rendering. The current page already provides them in the response.
 - **jsdom** provides browser-style APIs such as `window` and `document`. The scraper only needs to select elements, traverse the HTML, and read text, which Cheerio provides directly.
 - **The Hacker News API** would provide structured data, but the exercise specifically asks us to extract it by scraping the front page.
+
+The parser selects the first 30 ranked rows before validating them. It rejects malformed entries within that group to preserve their original positions. It treats `discuss` as zero comments and assigns zero points and comments to entries with the job listing markup.
 
 Cheerio belongs inside the Hacker News adapter. The application receives typed entries through the news source port, so a change to the parser or page markup stays inside that adapter.
 
