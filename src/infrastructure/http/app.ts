@@ -1,7 +1,11 @@
 import Fastify from 'fastify';
 import { mapHttpError } from './error-mapper.ts';
 import type { GetEntriesUseCase } from '../../application/get-entries.use-case.ts';
-import { ENTRY_FILTERS } from '../../domain/filter.ts';
+import { ENTRY_FILTERS, type EntryFilter } from '../../domain/filter.ts';
+
+interface EntriesQuery {
+  readonly filter?: EntryFilter;
+}
 
 export function buildApp(useCase: GetEntriesUseCase, logger = false) {
   const app = Fastify({ logger });
@@ -13,13 +17,13 @@ export function buildApp(useCase: GetEntriesUseCase, logger = false) {
     return reply.code(statusCode).send(body);
   });
 
-  app.get('/entries', {
+  app.get<{ Querystring: EntriesQuery }>('/entries', {
     schema: {
       querystring: {
         type: 'object',
         properties: { filter: { type: 'string', enum: ENTRY_FILTERS } },
       },
     },
-  }, () => useCase.execute());
+  }, (request) => useCase.execute(request.query.filter ?? 'all'));
   return app;
 }
