@@ -14,7 +14,7 @@ pnpm install --frozen-lockfile
 cp .env.example .env
 ```
 
-Fill in the values in your local `.env`. Set `HN_URL` to `https://news.ycombinator.com/` and `FETCH_TIMEOUT_MS` to a positive decimal integer in milliseconds. For a five-second deadline, use `5000`. `PORT` is optional and defaults to `3000`. `CACHE_TTL_MS` and `DB_PATH` are reserved for upcoming cache and storage integrations.
+Fill in the values in your local `.env`. Set `HN_URL` to `https://news.ycombinator.com/` and `FETCH_TIMEOUT_MS` to a positive decimal integer in milliseconds. For a five-second deadline, use `5000`. `PORT` is optional and defaults to `3000`. `DB_PATH` is optional and defaults to `./data/hn-crawler.sqlite`; its parent directory is created when the server starts. `CACHE_TTL_MS` is reserved for the upcoming cache integration.
 
 ## Start the service
 
@@ -38,6 +38,8 @@ curl http://localhost:3000/entries
 ```
 
 The optional `filter` query parameter defaults to `all`. Use `long` to select titles with more than five words, ordered by comment count, or `short` to select titles with five words or fewer, ordered by points. Both orders are descending, with rank ascending to break ties. Unsupported filter values receive a `400` response. Hacker News failures receive `502`, and download timeouts receive `504`.
+
+Each successful request is recorded in SQLite with its UTC timestamp, filter, and result count. The database is stored at `DB_PATH` or, by default, `./data/hn-crawler.sqlite`.
 
 ```sh
 curl 'http://localhost:3000/entries?filter=long'

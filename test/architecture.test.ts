@@ -8,8 +8,10 @@ describe('architecture boundary', () => {
       '../src/domain/filter.ts',
       '../src/domain/front-page.ts',
       '../src/domain/title.ts',
+      '../src/domain/usage-record.ts',
       '../src/application/get-entries.use-case.ts',
       '../src/application/ports/news-source.port.ts',
+      '../src/application/ports/usage-repository.port.ts',
       '../src/application/ports/crawler-error.ts',
     ];
     for (const sourceFile of sourceFiles) {

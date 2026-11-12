@@ -2,7 +2,7 @@
 
 ## Why a hexagonal structure
 
-The crawler has two external dependencies with different reasons to change. Hacker News can change its HTML, and the application can change how it stores usage records. Ports give the use case a stable contract for each dependency. This lets us test the use case with an in-memory source and keep page selectors and SQL inside their respective adapters.
+The crawler has external dependencies with different reasons to change. Hacker News can change its HTML, and the application can change how it stores usage records. Ports give the use case a stable contract for each dependency. This lets us test the use case with in-memory implementations and keep page selectors and SQL inside their respective adapters.
 
 The diagram shows how the adapters will connect to the application.
 
@@ -13,14 +13,14 @@ flowchart LR
   UseCase --> SourcePort[News source port]
   HN[Hacker News adapter] -. implements .-> SourcePort
   UseCase --> UsagePort[Usage repository port]
-  SQLite[Planned SQLite adapter] -. implements .-> UsagePort
+  SQLite[SQLite adapter] -. implements .-> UsagePort
 ```
 
-Dependencies point inward. The domain defines the entry shape, the allowed filter values, and the front-page size rule. The application requests entries through the news source port and validates the result. Fastify is the inbound adapter. The Hacker News infrastructure downloads HTML and parses it into entries. The server will connect both operations to the news source port, and the planned SQLite adapter will store usage records.
+Dependencies point inward. The domain defines the entry and usage-record shapes, the filter rules, and the front-page size rule. The application requests entries through the news source port, validates and filters the result, and records usage through the usage repository port. Fastify is the inbound adapter. The Hacker News infrastructure downloads and parses HTML; the SQLite adapter writes usage records.
 
-The source tree groups business concepts under `src/domain/`, use cases and their contracts under `src/application/`, and concrete adapters under `src/infrastructure/`. The ports live in `src/application/ports/` because the use case defines the capabilities it needs. The HTTP adapter, Hacker News downloader, and environment configuration each have a folder in infrastructure. The SQLite folder will be added with its implementation.
+The source tree groups business concepts under `src/domain/`, use cases and their contracts under `src/application/`, and concrete adapters under `src/infrastructure/`. The ports live in `src/application/ports/` because the use case defines the capabilities it needs. The HTTP adapter, Hacker News downloader, database, and environment configuration each have a folder in infrastructure.
 
-`src/main.ts` is the composition root: it loads configuration, constructs the Hacker News adapter and use case, builds the Fastify application, and starts listening. Keeping this wiring outside the adapters makes dependencies visible and lets route tests inject a fake use case without opening a socket.
+`src/main.ts` is the composition root: it loads configuration, constructs the Hacker News and SQLite adapters and the use case, builds the Fastify application, and starts listening. It also closes the database when Fastify shuts down. Keeping this wiring outside the adapters makes dependencies visible and lets route tests inject a fake use case without opening a socket.
 
 ## Why Node.js and TypeScript
 
@@ -40,7 +40,11 @@ Vitest lets us test the use case with a fake source, simulate failed downloads, 
 
 ## Why SQLite for usage records
 
-The usage history should survive a restart and be easy to inspect. SQLite provides persistent, queryable storage in a local file without requiring a database service. When usage tracking is added, its repository port will keep storage details out of the use case.
+The usage history should survive a restart and be easy to inspect. SQLite provides persistent, queryable storage in a local file without requiring a separate database service. Node 24.15 includes `node:sqlite`, so this small project avoids another runtime dependency and native add-on. Its `DatabaseSync` API blocks the event loop during database work; that tradeoff is reasonable for these short, local writes at the crawler's expected request volume. The application sees only the `UsageRepositoryPort`, so storage can be replaced if concurrency or throughput needs grow. Node 24.15 documents `node:sqlite` as a release candidate, so this choice relies on the project's pinned Node major and should be reassessed before a wider production rollout ([Node.js SQLite documentation](https://nodejs.org/download/release/v24.15.0/docs/api/sqlite.html)).
+
+Each successful, valid request records an ISO 8601 UTC timestamp, the normalized filter, and the result count. The use case writes only after the source has returned and the 30-entry domain rule and filter have succeeded. A storage error propagates to the HTTP boundary and returns `500` rather than returning an unrecorded success. The Fastify close hook closes the database connection.
+
+The repository tracks schema versions with SQLite's `PRAGMA user_version` and applies migrations sequentially inside transactions. The first migration also adopts the unversioned table created by the earlier T08 implementation, preserving its rows. Future schema changes should add another migration rather than relying on `CREATE TABLE IF NOT EXISTS` to modify an existing table. If opening, migrating, or preparing the insert statement fails, the repository closes its connection before rethrowing the initialization error.
 
 ## Why Cheerio for Hacker News
 
