@@ -1,4 +1,4 @@
-import { CrawlerError, type CrawlerOutcome } from '../../application/ports/crawler-error.ts';
+import { CrawlerError } from '../../application/ports/crawler-error.ts';
 
 interface HttpErrorResponse {
   statusCode: number;
@@ -13,7 +13,7 @@ interface HttpErrorResponse {
 const crawlerResponses = {
   upstream_error: { statusCode: 502, message: 'Could not fetch the Hacker News front page.' },
   timeout: { statusCode: 504, message: 'Hacker News did not respond in time.' },
-} satisfies Record<CrawlerOutcome, { statusCode: number; message: string }>;
+} satisfies Record<CrawlerError['outcome'], { statusCode: number; message: string }>;
 
 export function mapHttpError(error: unknown): HttpErrorResponse {
   if (error instanceof CrawlerError) {

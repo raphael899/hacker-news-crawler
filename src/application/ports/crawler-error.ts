@@ -1,9 +1,7 @@
-export type CrawlerOutcome = 'upstream_error' | 'timeout';
-
 export class CrawlerError extends Error {
-  readonly outcome: CrawlerOutcome;
+  readonly outcome: 'upstream_error' | 'timeout';
 
-  constructor(outcome: CrawlerOutcome, message: string, options?: ErrorOptions) {
+  constructor(outcome: CrawlerError['outcome'], message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = 'CrawlerError';
     this.outcome = outcome;

@@ -1,1 +1,1 @@
-export type EntryFilter = 'all' | 'long' | 'short';
+export const ENTRY_FILTERS = ['all', 'long', 'short'] as const;
