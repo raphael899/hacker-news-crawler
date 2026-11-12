@@ -11,6 +11,7 @@ interface StoredUsageRecord {
   readonly filter: string;
   readonly result_count: number;
   readonly cache_status: string;
+  readonly outcome: string;
 }
 
 describe('SQLiteUsageRepository', () => {
@@ -23,6 +24,7 @@ describe('SQLiteUsageRepository', () => {
         filter: 'all',
         resultCount: 30,
         cacheStatus: 'miss',
+        outcome: 'success',
       })).not.toThrow();
     } finally {
       repository.close();
@@ -75,7 +77,7 @@ describe('SQLiteUsageRepository', () => {
     const directory = await mkdtemp(join(tmpdir(), 'hn-crawler-'));
     const databasePath = join(directory, 'usage.sqlite');
     const database = new DatabaseSync(databasePath);
-    database.exec('PRAGMA user_version = 2');
+    database.exec('PRAGMA user_version = 3');
     database.close();
     const closeSpy = vi.spyOn(DatabaseSync.prototype, 'close');
 
@@ -119,6 +121,7 @@ describe('SQLiteUsageRepository', () => {
       filter: 'long' as const,
       resultCount: 7,
       cacheStatus: 'miss' as const,
+      outcome: 'success' as const,
     };
 
     try {
@@ -132,7 +135,7 @@ describe('SQLiteUsageRepository', () => {
       const database = new DatabaseSync(databasePath);
       try {
         const row = database.prepare(`
-          SELECT requested_at, snapshot_at, filter, result_count, cache_status
+          SELECT requested_at, snapshot_at, filter, result_count, cache_status, outcome
           FROM usage_records
         `).get() as StoredUsageRecord | undefined;
         const schemaVersion = database.prepare('PRAGMA user_version').get() as { user_version: number };
@@ -142,8 +145,74 @@ describe('SQLiteUsageRepository', () => {
           filter: usageRecord.filter,
           result_count: usageRecord.resultCount,
           cache_status: usageRecord.cacheStatus,
+          outcome: usageRecord.outcome,
         });
-        expect(schemaVersion.user_version).toBe(2);
+        expect(schemaVersion.user_version).toBe(3);
+      } finally {
+        database.close();
+      }
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('migrates schema version 2 and persists crawler failures', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'hn-crawler-'));
+    const databasePath = join(directory, 'usage.sqlite');
+    const existingDatabase = new DatabaseSync(databasePath);
+    existingDatabase.exec(`
+      CREATE TABLE usage_records (
+        id INTEGER PRIMARY KEY,
+        requested_at TEXT NOT NULL,
+        filter TEXT NOT NULL CHECK (filter IN ('all', 'long', 'short')),
+        result_count INTEGER NOT NULL CHECK (result_count >= 0),
+        snapshot_at TEXT,
+        cache_status TEXT NOT NULL DEFAULT 'miss' CHECK (cache_status IN ('miss', 'coalesced', 'hit'))
+      );
+      INSERT INTO usage_records (requested_at, filter, result_count, snapshot_at, cache_status)
+      VALUES ('2026-11-12T14:00:00.000Z', 'all', 30, '2026-11-12T13:59:59.000Z', 'miss');
+      PRAGMA user_version = 2;
+    `);
+    existingDatabase.close();
+
+    try {
+      const repository = new SQLiteUsageRepository(databasePath);
+      repository.record({
+        requestedAt: '2026-11-12T15:00:00.000Z',
+        snapshotAt: null,
+        filter: 'short',
+        resultCount: 0,
+        cacheStatus: 'miss',
+        outcome: 'timeout',
+      });
+      repository.close();
+
+      const database = new DatabaseSync(databasePath);
+      try {
+        const rows = database.prepare(`
+          SELECT requested_at, snapshot_at, filter, result_count, cache_status, outcome
+          FROM usage_records ORDER BY id
+        `).all();
+        const schemaVersion = database.prepare('PRAGMA user_version').get() as { user_version: number };
+        expect(rows).toEqual([
+          {
+            requested_at: '2026-11-12T14:00:00.000Z',
+            snapshot_at: '2026-11-12T13:59:59.000Z',
+            filter: 'all',
+            result_count: 30,
+            cache_status: 'miss',
+            outcome: 'success',
+          },
+          {
+            requested_at: '2026-11-12T15:00:00.000Z',
+            snapshot_at: null,
+            filter: 'short',
+            result_count: 0,
+            cache_status: 'miss',
+            outcome: 'timeout',
+          },
+        ]);
+        expect(schemaVersion.user_version).toBe(3);
       } finally {
         database.close();
       }
@@ -179,6 +248,7 @@ describe('SQLiteUsageRepository', () => {
           filter: 'short',
           resultCount: 18,
           cacheStatus: 'coalesced',
+          outcome: 'success',
         });
       } finally {
         repository.close();
@@ -187,7 +257,7 @@ describe('SQLiteUsageRepository', () => {
       const database = new DatabaseSync(databasePath);
       try {
         const rows = database.prepare(`
-          SELECT requested_at, snapshot_at, filter, result_count, cache_status
+          SELECT requested_at, snapshot_at, filter, result_count, cache_status, outcome
           FROM usage_records
           ORDER BY id
         `).all();
@@ -199,6 +269,7 @@ describe('SQLiteUsageRepository', () => {
             filter: 'all',
             result_count: 30,
             cache_status: 'miss',
+            outcome: 'success',
           },
           {
             requested_at: '2026-11-12T15:00:00.000Z',
@@ -206,9 +277,10 @@ describe('SQLiteUsageRepository', () => {
             filter: 'short',
             result_count: 18,
             cache_status: 'coalesced',
+            outcome: 'success',
           },
         ]);
-        expect(schemaVersion.user_version).toBe(2);
+        expect(schemaVersion.user_version).toBe(3);
       } finally {
         database.close();
       }

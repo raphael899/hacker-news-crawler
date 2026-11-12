@@ -3,6 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { DatabaseSync, type StatementSync } from 'node:sqlite';
 import type { UsageRepositoryPort } from '../../application/ports/usage-repository.port.ts';
 import { CACHE_STATUSES } from '../../domain/cache-status.ts';
+import { USAGE_OUTCOMES } from '../../domain/crawler-outcome.ts';
 import type { UsageRecord } from '../../domain/usage-record.ts';
 
 type Migration = (database: DatabaseSync) => void;
@@ -10,6 +11,7 @@ type Migration = (database: DatabaseSync) => void;
 const migrations: readonly Migration[] = [
   createUsageRecordsTable,
   addCacheMetadataColumns,
+  addOutcomeColumn,
 ];
 
 export class SQLiteUsageRepository implements UsageRepositoryPort {
@@ -26,8 +28,8 @@ export class SQLiteUsageRepository implements UsageRepositoryPort {
     try {
       migrateDatabase(database);
       const insertStatement = database.prepare(`
-        INSERT INTO usage_records (requested_at, snapshot_at, filter, result_count, cache_status)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO usage_records (requested_at, snapshot_at, filter, result_count, cache_status, outcome)
+        VALUES (?, ?, ?, ?, ?, ?)
       `);
       this.database = database;
       this.insertStatement = insertStatement;
@@ -52,6 +54,7 @@ export class SQLiteUsageRepository implements UsageRepositoryPort {
       usageRecord.filter,
       usageRecord.resultCount,
       usageRecord.cacheStatus,
+      usageRecord.outcome,
     );
   }
 
@@ -131,5 +134,13 @@ function addCacheMetadataColumns(database: DatabaseSync): void {
     ALTER TABLE usage_records ADD COLUMN snapshot_at TEXT;
     ALTER TABLE usage_records ADD COLUMN cache_status TEXT NOT NULL DEFAULT 'miss'
       CHECK (cache_status IN (${allowedStatuses}));
+  `);
+}
+
+function addOutcomeColumn(database: DatabaseSync): void {
+  const allowedOutcomes = USAGE_OUTCOMES.map((outcome) => `'${outcome}'`).join(', ');
+  database.exec(`
+    ALTER TABLE usage_records ADD COLUMN outcome TEXT NOT NULL DEFAULT 'success'
+      CHECK (outcome IN (${allowedOutcomes}));
   `);
 }

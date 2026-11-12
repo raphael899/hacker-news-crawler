@@ -39,7 +39,7 @@ curl http://localhost:3000/entries
 
 The optional `filter` query parameter defaults to `all`. Use `long` to select titles with more than five words, ordered by comment count, or `short` to select titles with five words or fewer, ordered by points. Both orders are descending, with rank ascending to break ties. Unsupported filter values receive a `400` response. Hacker News failures receive `502`, and download timeouts receive `504`.
 
-Each successful request is recorded in SQLite with its UTC request timestamp, filter, result count, snapshot timestamp, and cache status. The database is stored at `DB_PATH` or, by default, `./data/hn-crawler.sqlite`.
+Successful requests and recognized crawler failures are recorded in SQLite with their UTC request timestamp, filter, outcome, result count, snapshot timestamp, and cache status. The database is stored at `DB_PATH` or, by default, `./data/hn-crawler.sqlite`.
 
 The response includes `X-Front-Page-Fetched-At` (the shared snapshot timestamp) and `X-Cache-Status` (`miss`, `coalesced`, or `hit`). The in-memory cache is shared by requests handled by the same server process.
 

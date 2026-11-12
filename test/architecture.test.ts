@@ -6,6 +6,7 @@ describe('architecture boundary', () => {
     const sourceFiles = [
       '../src/domain/entry.ts',
       '../src/domain/cache-status.ts',
+      '../src/domain/crawler-outcome.ts',
       '../src/domain/filter.ts',
       '../src/domain/front-page.ts',
       '../src/domain/title.ts',
