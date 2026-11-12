@@ -24,11 +24,25 @@ describe('HTTP app', () => {
   });
 
   it('exposes the application through a validated HTTP adapter', async () => {
-    const source: NewsSourcePort = { async fetchTopEntries() { return makeEntries(30); } };
+    const entries = makeEntries(30);
+    entries[0] = { ...entries[0]!, title: 'one two three four five six', comments: 50 };
+    entries[1] = { ...entries[1]!, points: 100 };
+    const source: NewsSourcePort = { async fetchTopEntries() { return entries; } };
     const app = buildApp(new GetEntriesUseCase(source));
     try {
-      expect((await app.inject('/entries')).statusCode).toBe(200);
-      expect((await app.inject('/entries?filter=long')).statusCode).toBe(200);
+      const allEntries = await app.inject('/entries');
+      expect(allEntries.statusCode).toBe(200);
+      expect(allEntries.json()).toHaveLength(30);
+
+      const longEntries = await app.inject('/entries?filter=long');
+      expect(longEntries.statusCode).toBe(200);
+      expect(longEntries.json()).toEqual([entries[0]]);
+
+      const shortEntries = await app.inject('/entries?filter=short');
+      expect(shortEntries.statusCode).toBe(200);
+      expect(shortEntries.json()).toHaveLength(29);
+      expect(shortEntries.json()[0].rank).toBe(2);
+
       const invalidRequest = await app.inject('/entries?filter=unknown');
       expect(invalidRequest.statusCode).toBe(400);
       expect(invalidRequest.json()).toEqual({

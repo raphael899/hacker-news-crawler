@@ -37,7 +37,12 @@ The server listens on `PORT` (default `3000`). Request the first 30 entries with
 curl http://localhost:3000/entries
 ```
 
-The optional `filter` query parameter defaults to `all`; unsupported values receive a `400` response. Hacker News failures receive `502`, and download timeouts receive `504`.
+The optional `filter` query parameter defaults to `all`. Use `long` to select titles with more than five words, ordered by comment count, or `short` to select titles with five words or fewer, ordered by points. Both orders are descending, with rank ascending to break ties. Unsupported filter values receive a `400` response. Hacker News failures receive `502`, and download timeouts receive `504`.
+
+```sh
+curl 'http://localhost:3000/entries?filter=long'
+curl 'http://localhost:3000/entries?filter=short'
+```
 
 ## Run tests
 
