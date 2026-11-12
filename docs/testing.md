@@ -1,6 +1,6 @@
 # Testing and local verification
 
-Run commands from the repository root. Copy `.env.example` to `.env` and set at least `HN_URL=https://news.ycombinator.com/` and `FETCH_TIMEOUT_MS=5000`. `DB_PATH` is relative to the directory where `pnpm dev` starts. For example, `DB_PATH=./data/usage.sqlite` means the database to inspect is `data/usage.sqlite`, not the README's default `data/hn-crawler.sqlite`.
+Run commands from the repository root. Copy `.env.example` to `.env`; its values (`HN_URL=https://news.ycombinator.com/`, `FETCH_TIMEOUT_MS=5000`, and the defaults for the optional settings) work without edits. `DB_PATH` is relative to the directory where `pnpm dev` starts. For example, `DB_PATH=./data/usage.sqlite` means the database to inspect is `data/usage.sqlite`, not the README's default `data/hn-crawler.sqlite`.
 
 ## Automated checks
 

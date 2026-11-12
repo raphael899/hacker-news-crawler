@@ -23,11 +23,20 @@ describe('HackerNewsNewsSource', () => {
     }));
   });
 
-  it('only supports the domain-defined front-page size', async () => {
+  it('honors a smaller limit from the source port', async () => {
+    const html = await readFile(new URL('../../fixtures/front-page.html', import.meta.url), 'utf8');
+    const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(html));
+    const source = new HackerNewsNewsSource({ url: 'https://news.ycombinator.com/', timeoutMs: 5000 }, request);
+
+    const entries = await source.fetchTopEntries(10);
+    expect(entries.map(({ rank }) => rank)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  });
+
+  it.each([0, -1, 1.5])('rejects the invalid limit %s before downloading', async (limit) => {
     const request = vi.fn<typeof fetch>();
     const source = new HackerNewsNewsSource({ url: 'https://news.ycombinator.com/', timeoutMs: 5000 }, request);
 
-    await expect(source.fetchTopEntries(20)).rejects.toThrow('only supports 30 entries');
+    await expect(source.fetchTopEntries(limit)).rejects.toThrow(RangeError);
     expect(request).not.toHaveBeenCalled();
   });
 });

@@ -5,18 +5,32 @@ export const ENTRY_FILTERS = ['all', 'long', 'short'] as const;
 
 export type EntryFilter = typeof ENTRY_FILTERS[number];
 
+interface FilterStrategy {
+  readonly includes: (entry: Entry) => boolean;
+  /** Metric sorted in descending order; omit it to keep the source order. */
+  readonly rankBy?: (entry: Entry) => number;
+}
+
+const MAX_SHORT_TITLE_WORDS = 5;
+
+const filterStrategies = {
+  all: { includes: () => true },
+  long: {
+    includes: ({ title }) => countTitleWords(title) > MAX_SHORT_TITLE_WORDS,
+    rankBy: ({ comments }) => comments,
+  },
+  short: {
+    includes: ({ title }) => countTitleWords(title) <= MAX_SHORT_TITLE_WORDS,
+    rankBy: ({ points }) => points,
+  },
+} satisfies Record<EntryFilter, FilterStrategy>;
+
 export function filterEntries(entries: readonly Entry[], filter: EntryFilter): readonly Entry[] {
-  if (filter === 'all') return [...entries];
+  const { includes, rankBy }: FilterStrategy = filterStrategies[filter];
+  const selected = entries.filter(includes);
+  if (!rankBy) return selected;
 
-  const filtered = entries.filter((entry) => {
-    const wordCount = countTitleWords(entry.title);
-    return filter === 'long' ? wordCount > 5 : wordCount <= 5;
-  });
-
-  return filtered.sort((first, second) => {
-    const metricDifference = filter === 'long'
-      ? second.comments - first.comments
-      : second.points - first.points;
-    return metricDifference || first.rank - second.rank;
-  });
+  return selected.sort((first, second) =>
+    rankBy(second) - rankBy(first) || first.rank - second.rank,
+  );
 }

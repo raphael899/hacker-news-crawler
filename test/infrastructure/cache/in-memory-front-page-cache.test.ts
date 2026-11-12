@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { FrontPageLoadError } from '../../../src/application/ports/front-page-cache.port.ts';
 import { FrontPage } from '../../../src/domain/front-page.ts';
 import { InMemoryFrontPageCache } from '../../../src/infrastructure/cache/in-memory-front-page-cache.ts';
 import { makeEntries } from '../../fixtures/entries.ts';
@@ -53,11 +54,32 @@ describe('InMemoryFrontPageCache', () => {
 
   it('does not cache a rejected load and permits a retry', async () => {
     const cache = new InMemoryFrontPageCache(60_000, () => 0, () => new Date('2026-11-12T15:00:00.000Z'));
-    const failedLoad = vi.fn(async () => { throw new Error('source unavailable'); });
-    await expect(cache.getOrLoad(failedLoad)).rejects.toThrow('source unavailable');
+    const failure = new Error('source unavailable');
+    const failedLoad = vi.fn(async () => { throw failure; });
+    await expect(cache.getOrLoad(failedLoad)).rejects.toMatchObject({ cacheStatus: 'miss', cause: failure });
 
     const retried = await cache.getOrLoad(async () => FrontPage.create(makeEntries(30)));
     expect(retried.cacheStatus).toBe('miss');
+  });
+
+  it('reports which concurrent requests joined a failed download', async () => {
+    const cache = new InMemoryFrontPageCache(60_000, () => 0, () => new Date('2026-11-12T15:00:00.000Z'));
+    const failure = new Error('source unavailable');
+    let rejectLoad: ((reason: unknown) => void) | undefined;
+    const load = vi.fn(() => new Promise<FrontPage>((_, reject) => { rejectLoad = reject; }));
+
+    const missRequest = cache.getOrLoad(load);
+    const coalescedRequest = cache.getOrLoad(load);
+    await vi.waitFor(() => expect(load).toHaveBeenCalledOnce());
+    rejectLoad?.(failure);
+    const results = await Promise.allSettled([missRequest, coalescedRequest]);
+
+    expect(results.map((result) => result.status === 'rejected' && result.reason)).toEqual([
+      expect.objectContaining({ cacheStatus: 'miss', cause: failure }),
+      expect.objectContaining({ cacheStatus: 'coalesced', cause: failure }),
+    ]);
+    expect(results.every((result) => result.status === 'rejected' && result.reason instanceof FrontPageLoadError))
+      .toBe(true);
   });
 
   it('rejects a non-positive or unsafe TTL', () => {

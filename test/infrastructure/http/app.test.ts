@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GetEntriesUseCase } from '../../../src/application/get-entries.use-case.ts';
 import { CrawlerError } from '../../../src/application/ports/crawler-error.ts';
+import type { GetEntriesPort } from '../../../src/application/ports/get-entries.port.ts';
 import type { NewsSourcePort } from '../../../src/application/ports/news-source.port.ts';
 import { buildApp } from '../../../src/infrastructure/http/app.ts';
 import { InMemoryFrontPageCache } from '../../../src/infrastructure/cache/in-memory-front-page-cache.ts';
@@ -9,6 +10,25 @@ import { InMemoryUsageRepository } from '../../fixtures/in-memory-usage-reposito
 import { PassThroughFrontPageCache } from '../../fixtures/pass-through-front-page-cache.ts';
 
 describe('HTTP app', () => {
+  it('depends only on the GetEntries input port', async () => {
+    const execute = vi.fn<GetEntriesPort['execute']>().mockResolvedValue({
+      entries: makeEntries(2),
+      fetchedAt: '2026-11-12T15:00:00.000Z',
+      cacheStatus: 'hit',
+    });
+    const app = buildApp({ execute });
+
+    try {
+      const response = await app.inject('/entries?filter=short');
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual(makeEntries(2));
+      expect(response.headers['x-cache-status']).toBe('hit');
+      expect(execute).toHaveBeenCalledWith('short');
+    } finally {
+      await app.close();
+    }
+  });
+
   it.each([29, 31])('returns 502 when the source provides %i entries', async (count) => {
     const app = buildApp(new GetEntriesUseCase({
       async fetchTopEntries() {
