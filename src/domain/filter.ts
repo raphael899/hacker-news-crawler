@@ -7,7 +7,6 @@ export type EntryFilter = typeof ENTRY_FILTERS[number];
 
 interface FilterStrategy {
   readonly includes: (entry: Entry) => boolean;
-  /** Metric sorted in descending order; omit it to keep the source order. */
   readonly rankBy?: (entry: Entry) => number;
 }
 
