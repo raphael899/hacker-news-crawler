@@ -13,9 +13,23 @@ const getEntries = new GetEntriesUseCase(newsSource, frontPageCache, usageReposi
 const app = buildApp(getEntries, { logger: true });
 app.addHook('onClose', async () => usageRepository.close());
 
+async function shutdown(signal: NodeJS.Signals): Promise<void> {
+  app.log.info({ signal }, 'Shutting down');
+  try {
+    await app.close();
+  } catch (error) {
+    app.log.error(error, 'Could not shut down cleanly');
+    process.exitCode = 1;
+  }
+}
+
+process.once('SIGINT', shutdown);
+process.once('SIGTERM', shutdown);
+
 try {
   await app.listen({ port: config.port, host: '0.0.0.0' });
 } catch (error) {
   app.log.error(error, 'Could not start the server');
   process.exitCode = 1;
+  await app.close();
 }
