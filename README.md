@@ -41,6 +41,15 @@ The optional `filter` query parameter defaults to `all`. Use `long` to select ti
 
 Successful requests and recognized crawler failures are recorded in SQLite with their UTC request timestamp, filter, outcome, result count, snapshot timestamp, and cache status. The database is stored at `DB_PATH` or, by default, `./data/hn-crawler.sqlite`.
 
+Outcomes are `success`, `upstream_error`, `timeout`, and `invalid_html`. Failed crawler requests have a `NULL` snapshot timestamp and a result count of zero.
+
+Inspect the latest recorded requests with the SQLite CLI (adjust the path if you set a custom `DB_PATH`):
+
+```sh
+sqlite3 ./data/hn-crawler.sqlite \
+  'SELECT requested_at, snapshot_at, filter, outcome, result_count, cache_status FROM usage_records ORDER BY id DESC LIMIT 10;'
+```
+
 The response includes `X-Front-Page-Fetched-At` (the shared snapshot timestamp) and `X-Cache-Status` (`miss`, `coalesced`, or `hit`). The in-memory cache is shared by requests handled by the same server process.
 
 ```sh
