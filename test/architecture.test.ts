@@ -68,7 +68,7 @@ describe('architecture boundary', () => {
       '../src/domain/front-page.ts',
       '../src/application/get-entries.use-case.ts',
       '../src/application/ports/news-source.port.ts',
-      '../src/application/ports/usage-repository.port.ts',
+      '../src/application/ports/crawler-error.ts',
     ];
     for (const sourceFile of sourceFiles) {
       const source = readFileSync(new URL(sourceFile, import.meta.url), 'utf8');

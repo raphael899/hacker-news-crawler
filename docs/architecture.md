@@ -11,12 +11,12 @@ flowchart LR
   UseCase --> SourcePort[News source port]
   HN[Hacker News adapter] -. implements .-> SourcePort
   UseCase --> UsagePort[Usage repository port]
-  SQLite[SQLite adapter] -. implements .-> UsagePort
+  SQLite[Planned SQLite adapter] -. implements .-> UsagePort
 ```
 
-Dependencies point inward. The domain defines entry types and filtering rules, and the application coordinates the use case through ports. Fastify is the inbound adapter. The Hacker News and SQLite adapters provide the external capabilities the use case needs.
+Dependencies point inward. The domain defines entry types and filtering rules, and the application coordinates the use case through ports. Fastify is the inbound adapter. The Hacker News adapter currently downloads HTML. The parser will turn that HTML into entries, and the planned SQLite adapter will store usage records.
 
-The source tree groups business concepts under `src/domain/`, use cases and their contracts under `src/application/`, and concrete adapters under `src/infrastructure/`. The ports live in `src/application/ports/` because the use case defines the capabilities it needs. HTTP, Hacker News, and SQLite each have a folder in infrastructure.
+The source tree groups business concepts under `src/domain/`, use cases and their contracts under `src/application/`, and concrete adapters under `src/infrastructure/`. The ports live in `src/application/ports/` because the use case defines the capabilities it needs. HTTP and the Hacker News downloader each have a folder in infrastructure. The SQLite folder will be added with its implementation.
 
 ## Why Node.js and TypeScript
 
@@ -32,11 +32,11 @@ Vitest lets us test the use case with a fake source and the parser with saved HT
 
 ## Why SQLite for usage records
 
-The usage history should survive a restart and be easy to inspect. SQLite provides persistent, queryable storage in a local file without requiring a database service. The usage repository port keeps storage details out of the use case.
+The usage history should survive a restart and be easy to inspect. SQLite provides persistent, queryable storage in a local file without requiring a database service. When usage tracking is added, its repository port will keep storage details out of the use case.
 
 ## Why Cheerio for Hacker News
 
-The titles, scores, and comment counts are already present in the HTML returned by the Hacker News front page. Node's `fetch` downloads that response, and Cheerio parses it so the adapter can use CSS selectors to read each story and its metadata. The parser can also run against saved HTML in tests, which makes the results repeatable without a network request.
+The titles, scores, and comment counts are already present in the HTML returned by the Hacker News front page. Node's `fetch` downloads that response, and the parser will use Cheerio so the adapter can use CSS selectors to read each story and its metadata. The parser can also run against saved HTML in tests, which makes the results repeatable without a network request.
 
 We considered three alternatives:
 

@@ -18,7 +18,7 @@ Set `HN_URL` to the front-page URL and `FETCH_TIMEOUT_MS` to the download deadli
 
 ## Start the service
 
-T01 provides the project foundation. Startup commands will be available once the HTTP server is wired to the Hacker News adapter.
+The HTTP adapter currently runs through the test suite. Starting a standalone server requires connecting the Hacker News parser to the route.
 
 ## Run tests
 
