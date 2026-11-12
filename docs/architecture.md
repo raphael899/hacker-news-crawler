@@ -52,6 +52,10 @@ We considered three alternatives:
 
 Cheerio belongs inside the Hacker News adapter. The application receives typed entries through the news source port, so a change to the parser or page markup stays inside that adapter.
 
+## Why load configuration at startup
+
+`loadConfig()` reads and validates the environment in one place. The future server entry point will call it once and pass the resulting settings to the downloader. The downloader accepts those settings directly, which lets its tests run without changing the process environment.
+
 ## Why one download deadline
 
 The adapter uses one abort signal for both the request and the response body. A server can send headers promptly and then stall while sending HTML, so a deadline that ends when the headers arrive would leave the crawler waiting. The adapter reports timeouts separately from HTTP and network errors. Each download makes one request, with redirects rejected, so the time and request count stay predictable.

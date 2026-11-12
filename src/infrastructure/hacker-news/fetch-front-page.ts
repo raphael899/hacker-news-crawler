@@ -1,9 +1,8 @@
 import { CrawlerError } from '../../application/ports/crawler-error.ts';
-import { readFetchTimeoutMs, readHackerNewsUrl } from '../config/hacker-news.ts';
+import type { HackerNewsConfig } from '../config/app-config.ts';
 
 export async function fetchFrontPage(
-  url = readHackerNewsUrl(),
-  timeoutMs = readFetchTimeoutMs(),
+  { url, timeoutMs }: HackerNewsConfig,
   request = fetch,
 ): Promise<string> {
   const signal = AbortSignal.timeout(timeoutMs);
