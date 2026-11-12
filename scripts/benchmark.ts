@@ -42,7 +42,7 @@ for (let index = 0; index < settings.downloadSamples; index += 1) {
     usageRepository,
   );
   const startedAt = performance.now();
-  const result = await useCase.execute();
+  const result = await useCase.execute('all');
   downloadDurations.push(performance.now() - startedAt);
   assertEntryCount(result.entries.length, 'live download');
   if (index === settings.downloadSamples - 1) cachedUseCase = useCase;
@@ -52,7 +52,7 @@ printStats('Request with download + parse', downloadDurations);
 
 if (!cachedUseCase) throw new Error('Could not initialize the cached use case');
 const cacheDurations = measureAsync(settings.cacheIterations, async () => {
-  const result = await cachedUseCase.execute();
+  const result = await cachedUseCase.execute('all');
   assertEntryCount(result.entries.length, 'cache hit');
   if (result.cacheStatus !== 'hit') {
     throw new Error(`Expected a cache hit, received ${result.cacheStatus}; increase CACHE_TTL_MS or reduce cache iterations`);

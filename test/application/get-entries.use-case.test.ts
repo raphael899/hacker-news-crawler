@@ -25,7 +25,7 @@ describe('GetEntriesUseCase', () => {
       new PassThroughFrontPageCache(),
       usageRepository,
       () => new Date(requestedAt),
-    ).execute();
+    ).execute('all');
     expect(result.entries).toEqual(entries);
     expect(result.fetchedAt).toBe('2026-11-12T15:00:00.000Z');
     expect(result.cacheStatus).toBe('miss');
@@ -48,7 +48,7 @@ describe('GetEntriesUseCase', () => {
       new InMemoryUsageRepository(),
     );
 
-    await expect(useCase.execute()).resolves.toMatchObject({ entries });
+    await expect(useCase.execute('all')).resolves.toMatchObject({ entries });
   });
 
   it('applies the requested filter after validating the complete front page', async () => {
@@ -77,7 +77,7 @@ describe('GetEntriesUseCase', () => {
       usageRepository,
     );
 
-    await expect(useCase.execute()).rejects.toThrow('Expected 30 front-page entries');
+    await expect(useCase.execute('all')).rejects.toThrow('Expected 30 front-page entries');
     expect(usageRepository.records).toEqual([{
       requestedAt: expect.any(String),
       snapshotAt: null,
@@ -104,8 +104,8 @@ describe('GetEntriesUseCase', () => {
       usageRepository,
     );
 
-    await expect(useCase.execute()).rejects.toMatchObject({ outcome: 'timeout' });
-    await expect(useCase.execute()).resolves.toMatchObject({ entries: makeEntries(30), cacheStatus: 'miss' });
+    await expect(useCase.execute('all')).rejects.toMatchObject({ outcome: 'timeout' });
+    await expect(useCase.execute('all')).resolves.toMatchObject({ entries: makeEntries(30), cacheStatus: 'miss' });
 
     expect(attempts).toBe(2);
     expect(usageRepository.records.map(({ outcome, snapshotAt, resultCount, cacheStatus }) => ({
@@ -152,7 +152,7 @@ describe('GetEntriesUseCase', () => {
       usageRepository,
     );
 
-    await expect(useCase.execute()).rejects.toBe(failure);
+    await expect(useCase.execute('all')).rejects.toBe(failure);
     expect(usageRepository.records).toMatchObject([{ cacheStatus: 'miss', outcome: 'timeout' }]);
   });
 
@@ -168,6 +168,6 @@ describe('GetEntriesUseCase', () => {
       failingRepository,
     );
 
-    await expect(useCase.execute()).rejects.toThrow('disk is full');
+    await expect(useCase.execute('all')).rejects.toThrow('disk is full');
   });
 });

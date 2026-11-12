@@ -9,5 +9,5 @@ export interface GetEntriesResult {
 }
 
 export interface GetEntriesPort {
-  execute(filter?: EntryFilter): Promise<GetEntriesResult>;
+  execute(filter: EntryFilter): Promise<GetEntriesResult>;
 }
