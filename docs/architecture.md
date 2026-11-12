@@ -8,7 +8,8 @@ The diagram shows how the adapters will connect to the application.
 
 ```mermaid
 flowchart LR
-  HTTP[HTTP adapter] --> UseCase[Application use case]
+  HTTP[HTTP adapter] --> InputPort[GetEntries input port]
+  UseCase[Application use case] -. implements .-> InputPort
   UseCase --> Domain[Domain types and rules]
   UseCase --> SourcePort[News source port]
   HN[Hacker News adapter] -. implements .-> SourcePort
@@ -18,18 +19,18 @@ flowchart LR
   SQLite[SQLite adapter] -. implements .-> UsagePort
 ```
 
-Dependencies point inward. The application defines the ports it needs; concrete adapters implement them in infrastructure. The responsibilities and the main code locations are:
+Dependencies point inward. The application defines the ports it needs; concrete adapters implement them in infrastructure. Fastify depends only on the `GetEntriesPort` input port, so route tests can pass a stub instead of the real use case. `test/architecture.test.ts` walks every file in `src/domain/` and `src/application/` and fails if one imports an external package or a module from an outer layer. The responsibilities and the main code locations are:
 
 | Area | Responsibility | Main files |
 | --- | --- | --- |
 | Domain | Entry and usage-record rules, the 30-entry invariant, title word counting, and filter ordering | `src/domain/entry.ts`, `front-page.ts`, `title.ts`, `filter.ts`, `usage-record.ts` |
-| Application | Fetch a snapshot through ports, validate it, apply filters, and record outcomes | `src/application/get-entries.use-case.ts`, `src/application/ports/` |
-| HTTP adapter | Validate query parameters, call the use case, map errors, and return cache metadata | `src/infrastructure/http/` |
+| Application | Implement the `GetEntriesPort` input port: fetch a snapshot through outbound ports, validate it, apply filters, and record outcomes | `src/application/get-entries.use-case.ts`, `src/application/ports/` |
+| HTTP adapter | Validate query parameters, call the `GetEntriesPort` input port, map errors, and return cache metadata | `src/infrastructure/http/` |
 | Hacker News adapter | Download and parse the front page using `fetch` and Cheerio | `src/infrastructure/hacker-news/` |
 | Cache adapter | Reuse snapshots for the TTL and coalesce concurrent downloads | `src/infrastructure/cache/` |
 | SQLite adapter | Persist usage records and apply versioned migrations | `src/infrastructure/database/` |
 
-`src/main.ts` is the composition root: it loads configuration, constructs adapters and the use case, builds the Fastify application, and starts listening. It also closes the database when Fastify shuts down. Keeping this wiring outside the adapters makes dependencies visible and lets route tests inject a fake use case without opening a socket.
+`src/main.ts` is the composition root: it loads configuration, constructs adapters and the use case, builds the Fastify application, and starts listening. It also closes the database when Fastify shuts down, and it calls `app.close()` on `SIGINT`, `SIGTERM`, or a failed `listen`, so stopping the process releases the SQLite connection. Keeping this wiring outside the adapters makes dependencies visible and lets route tests inject a fake use case without opening a socket.
 
 ## Documentation map
 
@@ -69,7 +70,7 @@ We considered three alternatives:
 - **jsdom** provides browser-style APIs such as `window` and `document`. The scraper only needs to select elements, traverse the HTML, and read text, which Cheerio provides directly.
 - **The Hacker News API** would provide structured data, but the exercise specifically asks us to extract it by scraping the front page.
 
-The parser selects the first 30 ranked rows before validating them. It rejects malformed entries within that group to preserve their original positions. It treats `discuss` as zero comments and assigns zero points and comments to entries with the job listing markup.
+The parser selects the first `limit` ranked rows (30 by default) before validating them. The news source port documents that `limit` must be a positive integer, and the adapter honors any such value, so it can substitute for the port without hidden restrictions; the domain still requires 30 for a front-page snapshot. It rejects malformed entries within that group to preserve their original positions. It treats `discuss` as zero comments and assigns zero points and comments to entries with the job listing markup.
 
 Cheerio belongs inside the Hacker News adapter. The application receives typed entries through the news source port, so a change to the parser or page markup stays inside that adapter.
 
@@ -99,10 +100,10 @@ The news source port defines errors in terms of the operation that failed. Fasti
 
 ## Why filtering runs after the front-page validation
 
-The use case first verifies that the source returned exactly 30 entries, then applies the requested domain filter. The `long` and `short` predicates are complementary (`> 5` and `<= 5`), so every source entry belongs to exactly one group. Long titles sort by comments and short titles by points, both descending, with the original rank as a deterministic tie-breaker. The `all` filter preserves the source order.
+The use case first verifies that the source returned exactly 30 entries, then applies the requested domain filter. The `long` and `short` predicates are complementary (`> 5` and `<= 5`), so every source entry belongs to exactly one group. Long titles sort by comments and short titles by points, both descending, with the original rank as a deterministic tie-breaker. The `all` filter preserves the source order. Each filter is a strategy in one table (a predicate plus an optional ranking metric), so adding a filter adds a table entry without changing the sorting code.
 
 ## Why the front-page cache is shared in memory
 
-All filters operate on the same first 30 entries, so the cache stores the validated front-page snapshot before filtering. A successful load is reused for the configured TTL (60 seconds by default). Concurrent requests arriving during an empty or expired cache share one in-flight promise; their records distinguish the loader (`miss`), concurrent waiters (`coalesced`), and later reuse (`hit`). The cache uses a monotonic clock for expiration and a wall-clock ISO timestamp for the snapshot. The endpoint returns that shared timestamp in `X-Front-Page-Fetched-At` while keeping the JSON body as the entry array. `CACHE_TTL_MS` can tune the TTL without changing code.
+All filters operate on the same first 30 entries, so the cache stores the validated front-page snapshot before filtering. A successful load is reused for the configured TTL (60 seconds by default). Concurrent requests arriving during an empty or expired cache share one in-flight promise; their records distinguish the loader (`miss`), concurrent waiters (`coalesced`), and later reuse (`hit`). When the shared load fails, the cache rejects every caller with a `FrontPageLoadError` that carries that caller's status and keeps the crawler error as its `cause`. The use case records the failure with the correct status and rethrows the original error, so HTTP error mapping does not change. The cache uses a monotonic clock for expiration and a wall-clock ISO timestamp for the snapshot. The endpoint returns that shared timestamp in `X-Front-Page-Fetched-At` while keeping the JSON body as the entry array. `CACHE_TTL_MS` can tune the TTL without changing code.
 
 The usage table's schema version 2 adds `snapshot_at` and `cache_status`; schema version 3 adds the crawler outcome. Both migrations preserve existing request history. Older records have no known snapshot timestamp, retain `miss` as their default cache status, and default to the `success` outcome.
