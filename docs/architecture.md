@@ -18,11 +18,22 @@ flowchart LR
   SQLite[SQLite adapter] -. implements .-> UsagePort
 ```
 
-Dependencies point inward. The domain defines entry and usage-record shapes, cache statuses, filter rules, and the front-page size rule. The application requests entries through the news source and cache ports, filters the validated snapshot, and records usage through the usage repository port. Fastify is the inbound adapter. The Hacker News infrastructure downloads and parses HTML; the in-memory cache shares snapshots and coalesces concurrent loads; SQLite writes usage records.
+Dependencies point inward. The application defines the ports it needs; concrete adapters implement them in infrastructure. The responsibilities and the main code locations are:
 
-The source tree groups business concepts under `src/domain/`, use cases and their contracts under `src/application/`, and concrete adapters under `src/infrastructure/`. The ports live in `src/application/ports/` because the use case defines the capabilities it needs. The HTTP adapter, Hacker News downloader, database, and environment configuration each have a folder in infrastructure.
+| Area | Responsibility | Main files |
+| --- | --- | --- |
+| Domain | Entry and usage-record rules, the 30-entry invariant, title word counting, and filter ordering | `src/domain/entry.ts`, `front-page.ts`, `title.ts`, `filter.ts`, `usage-record.ts` |
+| Application | Fetch a snapshot through ports, validate it, apply filters, and record outcomes | `src/application/get-entries.use-case.ts`, `src/application/ports/` |
+| HTTP adapter | Validate query parameters, call the use case, map errors, and return cache metadata | `src/infrastructure/http/` |
+| Hacker News adapter | Download and parse the front page using `fetch` and Cheerio | `src/infrastructure/hacker-news/` |
+| Cache adapter | Reuse snapshots for the TTL and coalesce concurrent downloads | `src/infrastructure/cache/` |
+| SQLite adapter | Persist usage records and apply versioned migrations | `src/infrastructure/database/` |
 
-`src/main.ts` is the composition root: it loads configuration, constructs the Hacker News and SQLite adapters and the use case, builds the Fastify application, and starts listening. It also closes the database when Fastify shuts down. Keeping this wiring outside the adapters makes dependencies visible and lets route tests inject a fake use case without opening a socket.
+`src/main.ts` is the composition root: it loads configuration, constructs adapters and the use case, builds the Fastify application, and starts listening. It also closes the database when Fastify shuts down. Keeping this wiring outside the adapters makes dependencies visible and lets route tests inject a fake use case without opening a socket.
+
+## Documentation map
+
+The [README](../README.md) is the setup and usage guide, including the SQLite inspection query. [Testing and local verification](testing.md) contains the manual database and cache checks. [`AGENTS.md`](../AGENTS.md) gives coding agents concise repository instructions; it points back to these user-facing guides rather than duplicating their explanations.
 
 ## Why Node.js and TypeScript
 
