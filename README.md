@@ -57,6 +57,10 @@ pnpm test:coverage
 
 Use `pnpm test` to run the suite once and `pnpm test:coverage` to check it against the configured coverage thresholds. Test directories mirror `src/`.
 
+## Measure parser, downloads, and cache hits
+
+With `.env` configured, run `pnpm benchmark`. See [benchmark methodology and live results](docs/benchmark-results.md). The benchmark makes a small number of live requests to Hacker News, so run it manually and outside CI.
+
 ## Lint, check types, and build
 
 ```sh
