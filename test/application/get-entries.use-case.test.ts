@@ -143,6 +143,19 @@ describe('GetEntriesUseCase', () => {
       ]);
   });
 
+  it('treats an unwrapped cache rejection as a miss', async () => {
+    const usageRepository = new InMemoryUsageRepository();
+    const failure = new CrawlerError('timeout', 'upstream timed out');
+    const useCase = new GetEntriesUseCase(
+      { async fetchTopEntries() { return makeEntries(30); } },
+      { async getOrLoad() { throw failure; } },
+      usageRepository,
+    );
+
+    await expect(useCase.execute()).rejects.toBe(failure);
+    expect(usageRepository.records).toMatchObject([{ cacheStatus: 'miss', outcome: 'timeout' }]);
+  });
+
   it('propagates usage storage failures to the HTTP adapter', async () => {
     const failingRepository: UsageRepositoryPort = {
       record() {
