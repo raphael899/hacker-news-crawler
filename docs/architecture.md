@@ -6,7 +6,7 @@
 2. **Scraping with `fetch` and Cheerio.** The front page already contains every field in its HTML, so a browser (Playwright) is unnecessary, and the exercise asks for scraping rather than the Hacker News API.
 3. **A small domain.** It holds only the business rules: an entry, the 30-entry front page, word counting, and the two filters.
 4. **One shared, cached front page.** All filters work on the same validated snapshot. It is reused for 60 seconds, and concurrent requests share one download. Responses are fast, and Hacker News receives one download per minute instead of one per request.
-5. **Usage history in PostgreSQL.** Every request records its timestamp, filter, outcome, result count, cache status, and duration in milliseconds.
+5. **Usage history in PostgreSQL.** Requests with a supported filter record their timestamp, applied filter, outcome, result count, cache status, and duration in milliseconds.
 6. **Classes for collaborators, functions for transformations.** Dependencies are injected through constructors, and `src/main.ts` is the only place that wires them together.
 
 ## Layers
@@ -46,7 +46,7 @@ Hexagonal architecture fixes the direction of dependencies, not the use of class
 
 ## Scraping
 
-The parser takes the first 30 `tr.athing` rows and pairs each one with the metadata row that follows it. It checks each story's id, rank, title, and item link, so a broken row fails instead of being replaced silently by row 31. `discuss` counts as zero comments, and job postings, which have no score, count as zero points and comments. The checks are small named functions (`isJobPosting`, `parsePoints`, `parseComments`).
+The parser takes the first 30 `tr.athing` rows and pairs each one with the metadata row that follows it. It checks each entry's id, rank, title, and metadata link, so a broken row fails instead of being replaced silently by row 31. `discuss` counts as zero comments, and job postings count as zero points and comments. A job posting can link to Hacker News or an external site. The parser identifies a job by its spacer image and the absence of voting controls and scoring metadata. The checks are small named functions (`isJobPosting`, `parsePoints`, `parseComments`).
 
 Every failure is a `CrawlerError` with one of three outcomes: `upstream_error` (HTTP or network error), `timeout`, or `invalid_html`. A single deadline covers the request and the response body, because a server can send headers quickly and then stall. When the domain rejects a page that does not have exactly 30 entries, the use case turns that into `invalid_html` too, so the HTTP adapter maps one error type to `502` or `504`.
 

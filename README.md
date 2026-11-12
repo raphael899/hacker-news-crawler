@@ -1,6 +1,6 @@
 # Hacker News Crawler
 
-A TypeScript service that scrapes the first 30 entries of [Hacker News](https://news.ycombinator.com/) (rank, title, points, and comments), filters them by title length, and records every request in PostgreSQL. It follows a hexagonal architecture; [Architecture](docs/architecture.md) explains the key design decisions.
+A TypeScript service that scrapes the first 30 entries of [Hacker News](https://news.ycombinator.com/) (rank, title, points, and comments), filters them by title length, and stores usage data in PostgreSQL. The [architecture guide](docs/architecture.md) explains the hexagonal design and its key decisions.
 
 ## Quick start
 
@@ -36,7 +36,7 @@ The response headers `X-Cache-Status` (`miss`, `coalesced`, or `hit`) and `X-Fro
 
 ## Usage data
 
-Each request is stored in the `usage_records` table with its request time, filter, outcome (`success`, `upstream_error`, `timeout`, or `invalid_html`), result count, snapshot time, cache status, and duration in milliseconds.
+For requests with a supported filter (including the default), the `usage_records` table stores the request time, applied filter, outcome (`success`, `upstream_error`, `timeout`, or `invalid_html`), result count, snapshot time, cache status, and duration in milliseconds.
 
 ```sh
 docker compose exec postgres psql -U crawler -d hn_crawler -c 'SELECT requested_at, filter, outcome, result_count, cache_status, duration_ms FROM usage_records ORDER BY id DESC LIMIT 10;'

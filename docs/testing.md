@@ -16,7 +16,9 @@ The PostgreSQL repository tests run when `TEST_DATABASE_URL` is set. They create
 
 `docker compose run --rm --build test` runs only `pnpm test:coverage`; run `pnpm lint`, `pnpm typecheck`, and `pnpm build` on the host, as CI does.
 
-The repository integration tests cover schema creation, repeated startup, adding `duration_ms` to an older table, persisted success and failure records, every filter, cache status, and outcome the code defines, and idle connection errors (the last one runs even without a database). `test/architecture.test.ts` walks every file in `src/domain/` and `src/application/` and fails if one imports an external package or an outer layer. The remaining tests use deterministic fixtures and clocks and do not depend on a live Hacker News response or wall-clock delays.
+The repository integration tests cover schema creation, repeated startup, adding `duration_ms` to an older table, persisted success and failure records, every filter, cache status, and outcome the code defines, and idle connection errors (the last one runs even without a database). `test/architecture.test.ts` walks every file in `src/domain/` and `src/application/` and fails if one imports an external package or an outer layer.
+
+The parser tests cover a job with an external title link and verify that it keeps its rank among the first 30 entries with zero points and comments. Tests outside the PostgreSQL integration suite use deterministic fixtures and clocks and do not depend on a live Hacker News response or wall-clock delays.
 
 ## Verify usage records locally
 
