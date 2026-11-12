@@ -14,7 +14,7 @@ npm ci
 cp .env.example .env
 ```
 
-Set `HN_URL` to the front-page URL and `FETCH_TIMEOUT_MS` to the download deadline in milliseconds. The example file uses Hacker News and a 5-second deadline.
+Set `HN_URL` to the front-page URL and `FETCH_TIMEOUT_MS` to the download deadline as a positive decimal integer in milliseconds. The example file uses Hacker News and a 5-second deadline.
 
 ## Start the service
 
