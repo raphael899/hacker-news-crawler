@@ -1,20 +1,13 @@
-import type { Entry } from '../domain/entry.ts';
 import type { CrawlerOutcome } from '../domain/crawler-outcome.ts';
 import { filterEntries, type EntryFilter } from '../domain/filter.ts';
 import { FrontPage, InvalidFrontPageError } from '../domain/front-page.ts';
-import type { CacheStatus } from '../domain/cache-status.ts';
 import { CrawlerError } from './ports/crawler-error.ts';
 import type { FrontPageCachePort } from './ports/front-page-cache.port.ts';
+import type { GetEntriesPort, GetEntriesResult } from './ports/get-entries.port.ts';
 import type { NewsSourcePort } from './ports/news-source.port.ts';
 import type { UsageRepositoryPort } from './ports/usage-repository.port.ts';
 
-export interface GetEntriesResult {
-  readonly entries: readonly Entry[];
-  readonly fetchedAt: string;
-  readonly cacheStatus: CacheStatus;
-}
-
-export class GetEntriesUseCase {
+export class GetEntriesUseCase implements GetEntriesPort {
   private readonly newsSource: NewsSourcePort;
   private readonly frontPageCache: FrontPageCachePort;
   private readonly usageRepository: UsageRepositoryPort;

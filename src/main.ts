@@ -10,7 +10,7 @@ const newsSource = new HackerNewsNewsSource(config.hackerNews);
 const frontPageCache = new InMemoryFrontPageCache(config.cacheTtlMs);
 const usageRepository = new SQLiteUsageRepository(config.databasePath);
 const getEntries = new GetEntriesUseCase(newsSource, frontPageCache, usageRepository);
-const app = buildApp(getEntries, true);
+const app = buildApp(getEntries, { logger: true });
 app.addHook('onClose', async () => usageRepository.close());
 
 try {

@@ -1,13 +1,17 @@
 import Fastify from 'fastify';
 import { mapHttpError } from './error-mapper.ts';
-import type { GetEntriesUseCase } from '../../application/get-entries.use-case.ts';
+import type { GetEntriesPort } from '../../application/ports/get-entries.port.ts';
 import { ENTRY_FILTERS, type EntryFilter } from '../../domain/filter.ts';
 
 interface EntriesQuery {
   readonly filter?: EntryFilter;
 }
 
-export function buildApp(useCase: GetEntriesUseCase, logger = false) {
+export interface AppOptions {
+  readonly logger?: boolean;
+}
+
+export function buildApp(getEntries: GetEntriesPort, { logger = false }: AppOptions = {}) {
   const app = Fastify({ logger });
   app.setErrorHandler((error, request, reply) => {
     const { statusCode, body } = mapHttpError(error);
@@ -25,7 +29,7 @@ export function buildApp(useCase: GetEntriesUseCase, logger = false) {
       },
     },
   }, async (request, reply) => {
-    const result = await useCase.execute(request.query.filter ?? 'all');
+    const result = await getEntries.execute(request.query.filter ?? 'all');
     reply
       .header('X-Front-Page-Fetched-At', result.fetchedAt)
       .header('X-Cache-Status', result.cacheStatus);
