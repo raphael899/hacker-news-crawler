@@ -5,7 +5,7 @@ export interface HackerNewsConfig {
 
 export interface AppConfig {
   readonly port: number;
-  readonly databasePath: string;
+  readonly databaseUrl: string;
   readonly cacheTtlMs: number;
   readonly hackerNews: HackerNewsConfig;
 }
@@ -13,7 +13,7 @@ export interface AppConfig {
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   return {
     port: parsePort(env.PORT),
-    databasePath: parseDatabasePath(env.DB_PATH),
+    databaseUrl: parseDatabaseUrl(env.DATABASE_URL),
     cacheTtlMs: parseCacheTtlMs(env.CACHE_TTL_MS),
     hackerNews: {
       url: parseHackerNewsUrl(env.HN_URL),
@@ -22,9 +22,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   };
 }
 
-function parseDatabasePath(rawValue: string | undefined): string {
-  const value = rawValue?.trim();
-  return value || './data/hn-crawler.sqlite';
+function parseDatabaseUrl(rawValue: string | undefined): string {
+  const value = rawValue?.trim() ?? '';
+  const url = URL.parse(value);
+  if (!url || !['postgres:', 'postgresql:'].includes(url.protocol) || !url.hostname || !url.pathname.slice(1)) {
+    throw new Error('DATABASE_URL must be a PostgreSQL connection URL with a database name');
+  }
+  return value;
 }
 
 function parsePort(rawValue: string | undefined): number {
@@ -61,7 +65,6 @@ function parseFetchTimeoutMs(rawValue: string | undefined): number {
   const value = rawValue?.trim() ?? '';
   const timeoutMs = Number(value);
 
-  // Node.js timers use a positive signed 32-bit delay.
   if (!/^[0-9]+$/.test(value) || timeoutMs < 1 || timeoutMs > 2 ** 31 - 1) {
     throw new Error('FETCH_TIMEOUT_MS must be a positive decimal integer within the Node.js timer range');
   }

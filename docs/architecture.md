@@ -16,7 +16,7 @@ flowchart LR
   UseCase --> CachePort[Front-page cache port]
   Cache[In-memory cache adapter] -. implements .-> CachePort
   UseCase --> UsagePort[Usage repository port]
-  SQLite[SQLite adapter] -. implements .-> UsagePort
+  Postgres[PostgreSQL adapter] -. implements .-> UsagePort
 ```
 
 Dependencies point inward. The application defines the ports it needs; concrete adapters implement them in infrastructure. Fastify depends only on the `GetEntriesPort` input port, so route tests can pass a stub instead of the real use case. `test/architecture.test.ts` walks every file in `src/domain/` and `src/application/` and fails if one imports an external package or a module from an outer layer. The responsibilities and the main code locations are:
@@ -28,13 +28,13 @@ Dependencies point inward. The application defines the ports it needs; concrete 
 | HTTP adapter | Validate query parameters, call the `GetEntriesPort` input port, map errors, and return cache metadata | `src/infrastructure/http/` |
 | Hacker News adapter | Download and parse the front page using `fetch` and Cheerio | `src/infrastructure/hacker-news/` |
 | Cache adapter | Reuse snapshots for the TTL and coalesce concurrent downloads | `src/infrastructure/cache/` |
-| SQLite adapter | Persist usage records and apply versioned migrations | `src/infrastructure/database/` |
+| PostgreSQL adapter | Persist usage records through a connection pool and apply versioned migrations | `src/infrastructure/database/` |
 
-`src/main.ts` is the composition root: it loads configuration, constructs adapters and the use case, builds the Fastify application, and starts listening. It also closes the database when Fastify shuts down, and it calls `app.close()` on `SIGINT`, `SIGTERM`, or a failed `listen`, so stopping the process releases the SQLite connection. Keeping this wiring outside the adapters makes dependencies visible and lets route tests inject a fake use case without opening a socket.
+`src/main.ts` is the composition root: it loads configuration, connects to PostgreSQL and applies migrations, constructs the remaining adapters and use case, builds the Fastify application, and starts listening. It closes the connection pool when Fastify shuts down, and it calls `app.close()` on `SIGINT`, `SIGTERM`, or a failed `listen`. Keeping this wiring outside the adapters makes dependencies visible and lets route tests inject a fake use case without opening a socket.
 
 ## Documentation map
 
-The [README](../README.md) is the setup and usage guide, including the SQLite inspection query. [Testing and local verification](testing.md) contains the manual database and cache checks. [`AGENTS.md`](../AGENTS.md) gives coding agents concise repository instructions; it points back to these user-facing guides rather than duplicating their explanations.
+The [README](../README.md) is the setup and usage guide, including the PostgreSQL inspection query. [Testing and local verification](testing.md) contains the manual database and cache checks. [`AGENTS.md`](../AGENTS.md) gives coding agents concise repository instructions; it points back to these user-facing guides rather than duplicating their explanations.
 
 ## Why Node.js and TypeScript
 
@@ -52,13 +52,15 @@ The project declares the pnpm version in `package.json` and commits `pnpm-lock.y
 
 Vitest lets us test the use case with a fake source, simulate failed downloads, and exercise the Fastify route without opening a port. The test directories mirror `src/`. The parser tests use saved HTML and run independently of the live site. CI runs lint, type checking, tests with coverage, and the build so reviewers can see whether a change meets the same checks used locally.
 
-## Why SQLite for usage records
+## Why PostgreSQL for usage records
 
-The usage history should survive a restart and be easy to inspect. SQLite provides persistent, queryable storage in a local file without requiring a separate database service. Node 24.15 includes `node:sqlite`, so this small project avoids another runtime dependency and native add-on. Its `DatabaseSync` API blocks the event loop during database work; that tradeoff is reasonable for these short, local writes at the crawler's expected request volume. The application sees only the `UsageRepositoryPort`, so storage can be replaced if concurrency or throughput needs grow. Node 24.15 documents `node:sqlite` as a release candidate, so this choice relies on the project's pinned Node major and should be reassessed before a wider production rollout ([Node.js SQLite documentation](https://nodejs.org/download/release/v24.15.0/docs/api/sqlite.html)).
+The API needs storage that persists across web-service restarts and is reachable from the deployed application. Managed PostgreSQL provides that boundary without tying the application to Render's local filesystem. The `UsageRepositoryPort` keeps the choice inside infrastructure, while the `PostgresUsageRepository` uses `pg`'s asynchronous connection pool. Pool size is capped at five connections to leave headroom on the small free database plan; connection attempts have a finite timeout so a database outage does not hang startup indefinitely.
 
-Each request that completes successfully or fails with a recognized crawler error records an ISO 8601 UTC timestamp, the normalized filter, outcome, result count, snapshot timestamp when available, and cache status. Recognized crawler failures include timeouts, upstream errors, and invalid front pages. Failed downloads have no snapshot timestamp, a result count of zero, and do not populate the cache. A later request retries the source. A storage error propagates to the HTTP boundary and returns `500` rather than returning an unrecorded success. The Fastify close hook closes the database connection.
+`DATABASE_URL` is the only connection setting. It is supplied as an environment secret and never committed. Render provides an internal URL for services in the same region; use that URL for the deployed API. Local development can use the provider's external URL, which requires TLS. Place the web service in the database's region to use Render's private network and avoid public database traffic. The free database is intended for prototyping and has a limited lifetime, so a longer-lived deployment should use a database plan with an appropriate retention period.
 
-The repository tracks schema versions with SQLite's `PRAGMA user_version` and applies migrations sequentially inside transactions. The first migration also adopts the unversioned table created by the earlier T08 implementation, preserving its rows. Future schema changes should add another migration rather than relying on `CREATE TABLE IF NOT EXISTS` to modify an existing table. If opening, migrating, or preparing the insert statement fails, the repository closes its connection before rethrowing the initialization error.
+Each request that completes successfully or fails with a recognized crawler error records an ISO 8601 UTC timestamp, the normalized filter, outcome, result count, snapshot timestamp when available, and cache status. Recognized crawler failures include timeouts, upstream errors, and invalid front pages. Failed downloads have no snapshot timestamp, a result count of zero, and do not populate the cache. A later request retries the source. A storage error propagates to the HTTP boundary and returns `500` rather than returning an unrecorded success.
+
+The repository tracks schema versions in `schema_migrations` and applies pending migrations sequentially inside a transaction protected by a PostgreSQL advisory lock. The lock prevents concurrent application starts from applying the same migration at once. The migration ledger and usage-table changes commit together. If migration or connection initialization fails, the repository closes its pool before rethrowing the initialization error. Future schema changes should add a new numbered migration.
 
 ## Why Cheerio for Hacker News
 
@@ -106,4 +108,4 @@ The use case first verifies that the source returned exactly 30 entries, then ap
 
 All filters operate on the same first 30 entries, so the cache stores the validated front-page snapshot before filtering. A successful load is reused for the configured TTL (60 seconds by default). Concurrent requests arriving during an empty or expired cache share one in-flight promise; their records distinguish the loader (`miss`), concurrent waiters (`coalesced`), and later reuse (`hit`). When the shared load fails, the cache rejects every caller with a `FrontPageLoadError` that carries that caller's status and keeps the crawler error as its `cause`. The use case records the failure with the correct status and rethrows the original error, so HTTP error mapping does not change. The cache uses a monotonic clock for expiration and a wall-clock ISO timestamp for the snapshot. The endpoint returns that shared timestamp in `X-Front-Page-Fetched-At` while keeping the JSON body as the entry array. `CACHE_TTL_MS` can tune the TTL without changing code.
 
-The usage table's schema version 2 adds `snapshot_at` and `cache_status`; schema version 3 adds the crawler outcome. Both migrations preserve existing request history. Older records have no known snapshot timestamp, retain `miss` as their default cache status, and default to the `success` outcome.
+The PostgreSQL schema migration creates `usage_records` with all currently required fields and constraints, plus the `schema_migrations` ledger. The migration runs transactionally under an advisory lock, so concurrent application starts do not apply it twice. Future schema changes should add new sequential migrations rather than changing this applied migration.

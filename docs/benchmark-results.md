@@ -8,7 +8,7 @@ Run the benchmark manually from the repository root with Node 24 and a configure
 pnpm benchmark 500 500 3
 ```
 
-Arguments are parser iterations, cached request iterations, and live uncached download samples. The script parses the saved HTML fixture, fetches and parses the live Hacker News page once per uncached sample (with a one-second pause between downloads), then times requests served by the same in-memory cache. Every live and cached request must produce exactly 30 entries. The cache and download measurements use `GetEntriesUseCase` with a no-op usage repository, isolating that path from SQLite and Fastify overhead.
+Arguments are parser iterations, cached request iterations, and live uncached download samples. The script parses the saved HTML fixture, fetches and parses the live Hacker News page once per uncached sample (with a one-second pause between downloads), then times requests served by the same in-memory cache. Every live and cached request must produce exactly 30 entries. The cache and download measurements use `GetEntriesUseCase` with a no-op usage repository, isolating that path from PostgreSQL and Fastify overhead.
 
 The script reports mean, p50, p95, minimum, and maximum latency. It is kept out of CI because it calls Hacker News and network latency is outside the test runner's control.
 

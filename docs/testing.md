@@ -1,6 +1,6 @@
 # Testing and local verification
 
-Run commands from the repository root. Copy `.env.example` to `.env`; its values (`HN_URL=https://news.ycombinator.com/`, `FETCH_TIMEOUT_MS=5000`, and the defaults for the optional settings) work without edits. `DB_PATH` is relative to the directory where `pnpm dev` starts. For example, `DB_PATH=./data/usage.sqlite` means the database to inspect is `data/usage.sqlite`, not the README's default `data/hn-crawler.sqlite`.
+Run commands from the repository root. Copy `.env.example` to `.env`, then set `DATABASE_URL` to a PostgreSQL connection URL. For local development, use the provider's external URL. For a Render web service in the same region as the database, use its internal URL. Never commit `.env` or paste a connection URL into source code.
 
 ## Automated checks
 
@@ -12,58 +12,61 @@ pnpm lint
 pnpm build
 ```
 
-The cache tests use an injected monotonic clock to check hits and expiration without waiting in real time. The HTTP concurrency test holds the source response behind a promise, sends two requests, and verifies that one source download serves both. This makes the `miss`/`coalesced` behavior repeatable. Tests use fixtures and do not need a live request to Hacker News.
+The PostgreSQL repository tests run when `TEST_DATABASE_URL` is set. They create a unique temporary schema per test and drop only that schema during cleanup; use a disposable database and never point this variable at a production database. When the variable is absent, Vitest skips these integration tests. GitHub Actions starts PostgreSQL 18 for the CI run and sets `TEST_DATABASE_URL`, so those tests always run there.
 
-## Performance measurements and live check
+The repository integration tests cover schema creation, idempotent startup, persisted success and failure records, newer-schema rejection, and connection-pool cleanup. The remaining tests use deterministic fixtures and clocks and do not depend on a live Hacker News response or wall-clock delays.
 
-Run `pnpm benchmark` from the repository root with `.env` configured. It parses the checked-in HTML fixture repeatedly, makes a few sequential live downloads, then measures repeated use-case calls served from the in-memory cache. Optional positional arguments set parse iterations, cache-hit iterations, and live download samples, in that order; for example, `pnpm benchmark 1000 500 3`. Live samples are spaced by one second. The live check validates that each request returns exactly 30 entries and the cache samples are actual hits. The report includes the runtime, platform, configuration, mean, p50, p95, minimum, and maximum durations.
+## Verify the managed database
 
-The timing comparison isolates parser work and application request paths. It uses a no-op usage repository, so download/cache request timings exclude SQLite writes and Fastify overhead. Network timings vary with Hacker News and the local connection; use the recorded environment and sample counts when comparing runs. Never add live benchmark execution to CI.
+Wait until the database provider reports the instance as available. Confirm that the web service and Render database use the same region before configuring the service with the database's internal URL. The Render free database is for testing/prototyping and expires after 30 days; its dashboard shows the exact expiry date.
 
-See [benchmark methodology and live results](benchmark-results.md) for the recorded run.
-
-## Check SQLite records
-
-Start the service with `pnpm dev`, then make a successful request:
+For a service using `DATABASE_URL`, make a successful request:
 
 ```sh
-curl -i 'http://localhost:3000/entries'
+curl -i 'https://YOUR-SERVICE.onrender.com/entries'
 ```
 
-Inspect the database configured by `DB_PATH`. For `DB_PATH=./data/usage.sqlite`:
+Then run this query with `psql` connected to the same database:
 
-```sh
-sqlite3 ./data/usage.sqlite '.tables'
-sqlite3 ./data/usage.sqlite \
-  'SELECT requested_at, snapshot_at, filter, result_count, cache_status, outcome FROM usage_records ORDER BY id DESC LIMIT 10;'
+```sql
+SELECT requested_at, snapshot_at, filter, outcome, result_count, cache_status
+FROM usage_records
+ORDER BY id DESC
+LIMIT 10;
 ```
 
-The table appears after the service initializes the database. A successful endpoint request adds one row with its request time, snapshot time, filter, result count, cache status, and `success` outcome. Recognized crawler failures also add a row; failed downloads have a null snapshot time, zero results, and an outcome such as `timeout`. If SQLite says `no such table`, first check that the server is running and that the command points to the same `DB_PATH` as `.env`.
+Each successful request should add a row containing its request time, snapshot time, filter, result count, cache status, and `success` outcome. Recognized crawler failures also add a row with a null snapshot time, zero results, and an outcome such as `timeout`. If the table is missing, check the service logs for migration errors and confirm that the service is using the expected `DATABASE_URL`.
+
+## Measure parser, downloads, and cache hits
+
+Run `pnpm benchmark` from the repository root with `.env` configured. The benchmark parses the checked-in HTML fixture, makes a few sequential live downloads, and measures repeated cache hits. Optional positional arguments set parse iterations, cache-hit iterations, and live download samples, in that order; for example, `pnpm benchmark 1000 500 3`. Live samples are spaced by one second. See [benchmark methodology and live results](benchmark-results.md). Do not add live benchmark execution to CI.
+
+The timing comparison isolates parser work and application request paths. It uses a no-op usage repository, so download/cache timings exclude PostgreSQL writes and Fastify overhead. Network timings vary with Hacker News and the local connection; use the recorded environment and sample counts when comparing runs.
 
 ## Check cache reuse and expiration manually
 
-The cache belongs to one server process. Restart `pnpm dev` to start with an empty cache; this does not erase SQLite history. Immediately send two requests:
+The cache belongs to one server process. Restart `pnpm dev` to start with an empty cache; this does not erase PostgreSQL history. Immediately send two requests:
 
 ```sh
 curl -i 'http://localhost:3000/entries'
 curl -i 'http://localhost:3000/entries?filter=long'
 ```
 
-The first successful request after restart should return `X-Cache-Status: miss`. The next request within the TTL should return `hit`. Both should have the same `X-Front-Page-Fetched-At`, since filtering runs on the same cached front-page snapshot. The request rows in SQLite should show the corresponding statuses.
+The first successful request after restart should return `X-Cache-Status: miss`. The next request within the TTL should return `hit`. Both should have the same `X-Front-Page-Fetched-At`, since filtering runs on the same cached front-page snapshot. The rows in `usage_records` should show the corresponding statuses.
 
 To verify recovery after a timeout through the HTTP boundary, use the automated case in `test/infrastructure/http/app.test.ts`. It makes the first source attempt fail with a timeout and the next attempt succeed, then checks for a `504`, a later `200`, and both usage records. This is deterministic and does not rely on making Hacker News time out in a live environment.
 
 To observe expiration, set a short positive `CACHE_TTL_MS` in `.env` (for example, `5000`), restart the server, make a successful request, wait longer than five seconds, then make another successful request. The later response should return `miss` with a newer snapshot timestamp. Restore the desired TTL afterwards. Restarting the server also clears the in-memory cache, so do not restart between the two requests in this check.
 
-Concurrent requests can finish too quickly to reliably demonstrate `coalesced` with manual `curl` commands. Use the automated HTTP concurrency test for that guarantee; it verifies one download, a shared snapshot timestamp, and `miss` plus `coalesced` outcomes.
+Concurrent requests can finish too quickly to reliably demonstrate `coalesced` with manual `curl` commands. Use the automated HTTP concurrency test; it verifies one download, a shared snapshot timestamp, and `miss` plus `coalesced` outcomes.
 
 ## Code landmarks
 
 - `src/domain/front-page.ts` enforces the 30-entry snapshot rule; `src/domain/filter.ts` applies the title-length filters and ordering.
 - `src/application/get-entries.use-case.ts` coordinates fetching, snapshot validation, caching, filtering, and usage recording.
-- `src/application/ports/front-page-cache.port.ts` defines the cache contract; `src/infrastructure/cache/in-memory-front-page-cache.ts` implements TTL reuse and in-flight request sharing.
+- `src/application/ports/usage-repository.port.ts` defines the application-owned storage contract.
+- `src/infrastructure/database/postgres-usage-repository.ts` manages the PostgreSQL pool, migrations, and usage writes.
+- `src/infrastructure/cache/in-memory-front-page-cache.ts` handles TTL reuse and in-flight request sharing.
 - `src/infrastructure/hacker-news/hacker-news-news-source.ts` downloads and parses the Hacker News page.
-- `src/infrastructure/database/sqlite-usage-repository.ts` persists request records and applies schema migrations.
-- `src/infrastructure/http/app.ts` validates requests, calls the use case, and exposes cache metadata in response headers.
 
 For the reasoning behind these boundaries and technology choices, see [Architecture](architecture.md).

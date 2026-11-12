@@ -4,6 +4,7 @@
 
 - Node.js 24.15.0
 - [pnpm](https://pnpm.io/installation) 10.24.0
+- A PostgreSQL database
 
 ## Install and configure
 
@@ -14,7 +15,11 @@ pnpm install --frozen-lockfile
 cp .env.example .env
 ```
 
-The template already contains working values, so the service starts without further edits. `HN_URL` and `FETCH_TIMEOUT_MS` are required: the template sets them to `https://news.ycombinator.com/` and a five-second deadline (`5000` milliseconds). `PORT` is optional and defaults to `3000`. `DB_PATH` is optional and defaults to `./data/hn-crawler.sqlite`; its parent directory is created when the server starts. `CACHE_TTL_MS` is optional and defaults to `60000` (one minute).
+Set `DATABASE_URL` in your local `.env`. For local development, use your provider's external PostgreSQL URL; for a Render service in the same region as its database, use the internal URL. Keep the URL private and never commit `.env`. The example file intentionally leaves this value empty. The other example values configure Hacker News and the default port/cache settings.
+
+`HN_URL` and `FETCH_TIMEOUT_MS` are required. `PORT` defaults to `3000`, and `CACHE_TTL_MS` defaults to `60000` (one minute).
+
+The service applies versioned PostgreSQL migrations before it begins listening. No manual schema setup is needed.
 
 ## Start the service
 
@@ -39,23 +44,15 @@ curl http://localhost:3000/entries
 
 The optional `filter` query parameter defaults to `all`. Use `long` to select titles with more than five words, ordered by comment count, or `short` to select titles with five words or fewer, ordered by points. Both orders are descending, with rank ascending to break ties. Unsupported filter values receive a `400` response. Hacker News failures receive `502`, and download timeouts receive `504`.
 
-Successful requests and recognized crawler failures are recorded in SQLite with their UTC request timestamp, filter, outcome, result count, snapshot timestamp, and cache status. The database is stored at `DB_PATH` or, by default, `./data/hn-crawler.sqlite`.
+Successful requests and recognized crawler failures are recorded in PostgreSQL with their UTC request timestamp, filter, outcome, result count, snapshot timestamp, and cache status. The response includes `X-Front-Page-Fetched-At` (the shared snapshot timestamp) and `X-Cache-Status` (`miss`, `coalesced`, or `hit`). The in-memory cache is shared by requests handled by the same server process.
 
-Outcomes are `success`, `upstream_error`, `timeout`, and `invalid_html`. Failed crawler requests have a `NULL` snapshot timestamp and a result count of zero.
-
-Inspect the latest recorded requests with the SQLite CLI (adjust the path if you set a custom `DB_PATH`):
+Inspect recent request history from a shell where `DATABASE_URL` is set:
 
 ```sh
-sqlite3 ./data/hn-crawler.sqlite \
-  'SELECT requested_at, snapshot_at, filter, outcome, result_count, cache_status FROM usage_records ORDER BY id DESC LIMIT 10;'
+psql "$DATABASE_URL" -c 'SELECT requested_at, snapshot_at, filter, outcome, result_count, cache_status FROM usage_records ORDER BY id DESC LIMIT 10;'
 ```
 
-The response includes `X-Front-Page-Fetched-At` (the shared snapshot timestamp) and `X-Cache-Status` (`miss`, `coalesced`, or `hit`). The in-memory cache is shared by requests handled by the same server process.
-
-```sh
-curl 'http://localhost:3000/entries?filter=long'
-curl 'http://localhost:3000/entries?filter=short'
-```
+For Render, use the internal connection URL for a web service in the same region as the database. Free PostgreSQL instances are intended for testing and prototyping and expire after 30 days; check the provider dashboard for the instance's exact expiry date.
 
 ## Run tests
 
@@ -64,7 +61,7 @@ pnpm test
 pnpm test:coverage
 ```
 
-Use `pnpm test` to run the suite once and `pnpm test:coverage` to check it against the configured coverage thresholds. Test directories mirror `src/`.
+The PostgreSQL repository tests use a dedicated test database. Set `TEST_DATABASE_URL` to a disposable PostgreSQL database before running them locally; Vitest skips those integration cases when it is not set. GitHub Actions starts a temporary PostgreSQL service for each CI run. The suite also uses saved Hacker News HTML fixtures and does not make live requests to the site.
 
 ## Measure parser, downloads, and cache hits
 
