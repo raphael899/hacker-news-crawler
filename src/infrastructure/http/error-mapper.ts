@@ -1,4 +1,5 @@
 import { CrawlerError } from '../../application/ports/crawler-error.ts';
+import { InvalidFrontPageError } from '../../domain/front-page.ts';
 
 interface HttpErrorResponse {
   statusCode: number;
@@ -19,6 +20,13 @@ export function mapHttpError(error: unknown): HttpErrorResponse {
   if (error instanceof CrawlerError) {
     const { statusCode, message } = crawlerResponses[error.outcome];
     return { statusCode, body: { error: { code: error.outcome, message } } };
+  }
+
+  if (error instanceof InvalidFrontPageError) {
+    return {
+      statusCode: 502,
+      body: { error: { code: 'invalid_html', message: 'Hacker News returned an invalid front page.' } },
+    };
   }
 
   if (error instanceof Error && 'code' in error && error.code === 'FST_ERR_VALIDATION') {
