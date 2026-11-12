@@ -1,61 +1,62 @@
 # Hacker News Crawler
 
-A TypeScript service that scrapes the first 30 entries of [Hacker News](https://news.ycombinator.com/) (rank, title, points, and comments), filters them by title length, and records every request in PostgreSQL. It exposes one endpoint, `GET /entries`, and follows a hexagonal architecture; see [Architecture](docs/architecture.md) for the design decisions.
+A TypeScript service that scrapes the first 30 entries of [Hacker News](https://news.ycombinator.com/) (rank, title, points, and comments), filters them by title length, and records every request in PostgreSQL. It follows a hexagonal architecture; [Architecture](docs/architecture.md) explains the key design decisions.
 
-## Quick start with Docker (recommended)
+## Quick start
 
-Requirements: [Docker](https://docs.docker.com/get-docker/) with Compose v2. Node.js and PostgreSQL do not need to be installed on the host.
-
-Start PostgreSQL 18 and the API from the repository root:
+Requirements: [Docker](https://docs.docker.com/get-docker/) with Compose v2.
 
 ```sh
 docker compose up --build
 ```
 
-The API waits until PostgreSQL is healthy, applies the versioned migrations, and listens on `http://localhost:3000`. Request the first 30 entries:
+This starts PostgreSQL and the API on `http://localhost:3000`. If port `3000` or `5432` is taken, set `APP_PORT` or `POSTGRES_PORT`, for example `APP_PORT=3100 docker compose up --build`.
+
+## API
+
+`GET /entries?filter=all|long|short`
+
+| Filter | Entries | Order |
+| --- | --- | --- |
+| `all` (default) | All 30 | Rank |
+| `long` | Titles with more than five words | Comments, descending |
+| `short` | Titles with five words or fewer | Points, descending |
+
+Ties keep their original rank order. Words are whitespace-separated tokens that contain a letter or digit, so `This is - a self-explained example` has 5 words.
 
 ```sh
-curl -i http://localhost:3000/entries
+curl -i 'http://localhost:3000/entries?filter=long'
 ```
+
+```json
+[{ "rank": 3, "title": "An example title with seven words", "points": 412, "comments": 262 }]
+```
+
+The response headers `X-Cache-Status` (`miss`, `coalesced`, or `hit`) and `X-Front-Page-Fetched-At` show whether the shared front-page snapshot was reused and when it was downloaded. An unsupported filter returns `400`, a Hacker News failure `502`, and a timeout `504`.
+
+## Usage data
+
+Each request is stored in the `usage_records` table with its request time, filter, outcome (`success`, `upstream_error`, `timeout`, or `invalid_html`), result count, snapshot time, cache status, and duration in milliseconds.
 
 ```sh
-curl 'http://localhost:3000/entries?filter=long'
+docker compose exec postgres psql -U crawler -d hn_crawler -c 'SELECT requested_at, filter, outcome, result_count, cache_status, duration_ms FROM usage_records ORDER BY id DESC LIMIT 10;'
 ```
 
-```sh
-curl 'http://localhost:3000/entries?filter=short'
-```
+The data is kept in the `postgres-data` volume; `docker compose down -v` deletes it.
 
-The optional `filter` query parameter defaults to `all`. Use `long` to select titles with more than five words, ordered by comment count, or `short` to select titles with five words or fewer, ordered by points. Both orders are descending, with rank ascending to break ties. Unsupported filter values receive a `400` response. Hacker News failures receive `502`, and download timeouts receive `504`.
+## Tests
 
-The response includes `X-Front-Page-Fetched-At` (the shared snapshot timestamp) and `X-Cache-Status` (`miss`, `coalesced`, or `hit`). The in-memory cache is shared by requests handled by the same server process.
-
-Successful requests and recognized crawler failures are recorded in PostgreSQL with their UTC request timestamp, filter, outcome, result count, snapshot timestamp, and cache status. Outcomes are `success`, `upstream_error`, `timeout`, and `invalid_html`; failed requests have a `NULL` snapshot timestamp and a result count of zero. Inspect the latest records:
-
-```sh
-docker compose exec postgres psql -U crawler -d hn_crawler -c 'SELECT requested_at, snapshot_at, filter, outcome, result_count, cache_status FROM usage_records ORDER BY id DESC LIMIT 10;'
-```
-
-Run the whole test suite, including the PostgreSQL integration tests, in a container:
+Run the whole suite, including the PostgreSQL integration tests, in a container:
 
 ```sh
 docker compose run --rm --build test
 ```
 
-Stop the stack with `docker compose down`. The usage history is kept in the `postgres-data` volume; `docker compose down -v` deletes it. If ports `3000` or `5432` are taken, set `APP_PORT` or `POSTGRES_PORT`, for example `APP_PORT=3100 docker compose up --build`.
-
-The Compose credentials (`crawler`/`crawler`) are for this disposable local database only. `docker compose stop` shuts the API down cleanly: it closes the server and the database pool before exiting.
+The tests use saved Hacker News HTML and make no live requests. CI runs lint, type checking, the tests with coverage, and the build on every push. See [Testing](docs/testing.md) for manual checks and troubleshooting.
 
 ## Develop on the host
 
-Requirements: Node.js 24.15.0 and [pnpm](https://pnpm.io/installation) 10.24.0. The project uses two environment files, both ignored by Git:
-
-| File | Template | Database | Used by |
-| --- | --- | --- | --- |
-| `.env.local` | `.env.local.example` | Local Docker Compose PostgreSQL | `pnpm dev`, `pnpm benchmark` |
-| `.env` | `.env.example` | Production PostgreSQL | `pnpm start` |
-
-Start only the database in Docker, then install dependencies and create `.env.local`:
+Requirements: Node.js 24.15.0 and pnpm 10.24.0. Start only the database in Docker, then run the API with Node's watch mode:
 
 ```sh
 docker compose up -d postgres
@@ -66,97 +67,46 @@ pnpm install --frozen-lockfile
 ```
 
 ```sh
-cp .env.local.example .env.local
+cp .env.example .env.local
 ```
 
-The local template already points `DATABASE_URL` at the Compose database (`postgresql://crawler:crawler@localhost:5432/hn_crawler`), so it works without edits. `HN_URL`, `FETCH_TIMEOUT_MS`, and `DATABASE_URL` are required. `PORT` defaults to `3000`, and `CACHE_TTL_MS` defaults to `60000` (one minute).
+The template is empty on purpose. For the Compose database, fill `.env.local` with:
 
-Start the TypeScript server with Node's watch mode, using `.env.local`:
+```sh
+HN_URL=https://news.ycombinator.com/
+FETCH_TIMEOUT_MS=5000
+DATABASE_URL=postgresql://crawler:crawler@localhost:5432/hn_crawler
+```
 
 ```sh
 pnpm dev
 ```
 
-`npm run dev` works as well; the script only calls `node`.
-
-For a production-style run, create `.env` from `.env.example`, set `DATABASE_URL` to the production database, then compile and start the generated JavaScript:
-
-```sh
-cp .env.example .env
-```
-
-```sh
-pnpm build
-pnpm start
-```
-
-`pnpm start` writes usage records to the database in `.env`, so run it locally only when you intend to use production data. Never commit `.env` or `.env.local`.
-
-## Configuration
-
-| Variable | Required | Default | Purpose |
-| --- | --- | --- | --- |
-| `HN_URL` | Yes | — | Front page to scrape, normally `https://news.ycombinator.com/` |
-| `FETCH_TIMEOUT_MS` | Yes | — | Deadline for the whole download, in milliseconds |
-| `DATABASE_URL` | Yes | — | PostgreSQL URL (`postgresql://user:password@host:port/database`) |
-| `PORT` | No | `3000` | Port the API listens on |
-| `CACHE_TTL_MS` | No | `60000` | How long a scraped front page is reused |
-| `TEST_DATABASE_URL` | Tests only | — | Disposable database for the PostgreSQL integration tests |
-| `APP_PORT`, `POSTGRES_PORT` | Compose only | `3000`, `5432` | Host ports published by `docker compose` |
-
-On the host, `pnpm dev` loads these from `.env.local` and `pnpm start` from `.env`. In Docker, `docker-compose.yaml` sets them.
-
-## Run tests on the host
-
-```sh
-pnpm test
-pnpm test:coverage
-```
-
-The PostgreSQL repository tests run only when `TEST_DATABASE_URL` is set; otherwise Vitest skips them and `pnpm test:coverage` falls below its thresholds. With the Compose database running, use its `hn_crawler_test` database:
+Other commands: `pnpm test`, `pnpm lint`, `pnpm typecheck`, `pnpm build`, and `pnpm benchmark` (makes a few live requests; see [benchmark results](docs/benchmark-results.md)). Host test runs skip the PostgreSQL tests unless `TEST_DATABASE_URL` is set:
 
 ```sh
 TEST_DATABASE_URL=postgresql://crawler:crawler@localhost:5432/hn_crawler_test pnpm test:coverage
 ```
 
-GitHub Actions starts its own PostgreSQL service for each CI run. The suite uses saved Hacker News HTML fixtures and does not make live requests to the site.
+## Configuration
 
-## Deploy with managed PostgreSQL
+| Variable | Required | Default | Purpose |
+| --- | --- | --- | --- |
+| `HN_URL` | Yes | — | Page to scrape, normally `https://news.ycombinator.com/` |
+| `FETCH_TIMEOUT_MS` | Yes | — | Deadline for the whole download |
+| `DATABASE_URL` | Yes | — | PostgreSQL URL (`postgresql://user:password@host:port/database`) |
+| `PORT` | No | `3000` | Port the API listens on |
+| `CACHE_TTL_MS` | No | `60000` | How long a downloaded front page is reused |
 
-The service only needs `DATABASE_URL` and the Hacker News settings from the environment. The runtime image (`docker build --target runtime .`) reads them from its environment, not from a `.env` file. On Render, use the database's internal connection URL for a web service in the same region. Free Render PostgreSQL instances are intended for testing and expire after 30 days; check the dashboard for the exact date.
-
-## Measure parser, downloads, and cache hits
-
-With `.env.local` configured, run `pnpm benchmark`. See [benchmark methodology and live results](docs/benchmark-results.md). The benchmark makes a small number of live requests to Hacker News, so run it manually and outside CI.
-
-## Lint, check types, and build
-
-```sh
-pnpm lint
-pnpm typecheck
-pnpm build
-```
-
-The build writes compiled JavaScript to `dist/`.
+Both env files start from `.env.example`. `pnpm dev` reads `.env.local` and `pnpm start` reads `.env`; Docker Compose sets the variables itself. Blank optional variables use their defaults. An invalid value stops startup with an error that names the variable. Never commit `.env` or `.env.local`.
 
 ## Project structure
 
 ```text
 src/
-  domain/            Business rules: entries, word counting, filters, front-page size
-  application/       GetEntries use case and its ports
-  infrastructure/    Adapters: HTTP (Fastify), Hacker News (fetch + Cheerio), cache, PostgreSQL, config
-  main.ts            Composition root and graceful shutdown
-test/                Mirrors src/, plus fixtures and the architecture boundary test
-scripts/benchmark.ts Manual performance benchmark
-docker/postgres/     Init script that creates the test database
-Dockerfile           Multi-stage image (test and runtime targets)
-docker-compose.yaml  Local PostgreSQL, API, and test runner
+  domain/          Entries, the 30-entry front page, word counting, filters
+  application/     GetEntries use case and its ports
+  infrastructure/  Adapters: HTTP (Fastify), Hacker News (fetch + Cheerio), cache, PostgreSQL, config
+  main.ts          Composition root and graceful shutdown
+test/              Mirrors src/, plus fixtures and the architecture boundary test
 ```
-
-## Further reading
-
-- [Architecture and design decisions](docs/architecture.md)
-- [Testing and local verification](docs/testing.md), including troubleshooting
-- [Benchmark methodology and live results](docs/benchmark-results.md)
-- [Repository guidance for agents](AGENTS.md)
